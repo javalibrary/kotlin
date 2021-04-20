@@ -69,7 +69,7 @@ private val Family.toPodGenTaskName: String
         name
     )
 
-private fun String.toSetupBuildTaskName(pod: CocoapodsDependency): String = lowerCamelCaseName(
+fun String.toSetupBuildTaskName(pod: CocoapodsDependency): String = lowerCamelCaseName(
     KotlinCocoapodsPlugin.POD_SETUP_BUILD_TASK_NAME,
     pod.name.asValidTaskName(),
     this
