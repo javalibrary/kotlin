@@ -972,6 +972,7 @@ internal class InapplicableCandidateImpl(
 internal class ArgumentTypeMismatchImpl(
     override val expectedType: KtType,
     override val actualType: KtType,
+    override val isMismatchDueToNullability: Boolean,
     firDiagnostic: FirPsiDiagnostic<*>,
     override val token: ValidityToken,
 ) : KtFirDiagnostic.ArgumentTypeMismatch(), KtAbstractFirDiagnostic<PsiElement> {
