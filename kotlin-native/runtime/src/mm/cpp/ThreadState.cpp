@@ -13,7 +13,21 @@ const char* kotlin::internal::stateToString(ThreadState state) noexcept {
             return "RUNNABLE";
         case ThreadState::kNative:
             return "NATIVE";
+        case ThreadState::kSuspended:
+            return "SUSPENDED";
     }
+}
+
+std::string kotlin::internal::statesToString(std::initializer_list<ThreadState> states) noexcept {
+    std::string result = "{ ";
+    for (size_t i = 0; i < states.size(); i++) {
+        if (i != 0) {
+            result += ", ";
+        }
+        result += stateToString(data(states)[i]);
+    }
+    result += " }";
+    return result;
 }
 
 ALWAYS_INLINE ThreadState kotlin::SwitchThreadState(MemoryState* thread, ThreadState newState, bool reentrant) noexcept {
@@ -21,6 +35,10 @@ ALWAYS_INLINE ThreadState kotlin::SwitchThreadState(MemoryState* thread, ThreadS
 }
 
 ALWAYS_INLINE void kotlin::AssertThreadState(MemoryState* thread, ThreadState expected) noexcept {
+    AssertThreadState(thread->GetThreadData(), expected);
+}
+
+ALWAYS_INLINE void kotlin::AssertThreadState(MemoryState* thread, std::initializer_list<ThreadState> expected) noexcept {
     AssertThreadState(thread->GetThreadData(), expected);
 }
 
