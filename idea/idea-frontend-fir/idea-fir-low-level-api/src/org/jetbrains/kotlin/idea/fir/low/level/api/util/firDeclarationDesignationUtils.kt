@@ -19,10 +19,28 @@ internal fun FirDeclarationUntypedDesignation.ensurePathPhase(firResolvePhase: F
 internal fun FirDeclarationUntypedDesignation.ensureTargetPhase(firResolvePhase: FirResolvePhase) =
     check(declaration.resolvePhase >= firResolvePhase) { "Expected $firResolvePhase but found ${declaration.resolvePhase}" }
 
+internal fun FirDeclarationUntypedDesignation.ensurePhase(firResolvePhase: FirResolvePhase) {
+    toSequence(includeTarget = true).forEach {
+        check(it.resolvePhase >= firResolvePhase) { "Expected $firResolvePhase but found ${it.resolvePhase}" }
+    }
+}
+
 internal fun FirDeclarationUntypedDesignation.ensureTargetPhaseIfClass(firResolvePhase: FirResolvePhase) = when (declaration) {
-    is FirProperty, is FirSimpleFunction -> Unit
+    is FirProperty, is FirSimpleFunction, is FirConstructor -> Unit
     is FirClass<*>, is FirTypeAlias -> ensureTargetPhase(firResolvePhase)
     else -> error("Unexpected target")
 }
 
 internal fun FirDeclarationUntypedDesignation.targetContainingDeclaration(): FirDeclaration? = path.lastOrNull()
+
+internal fun FirDeclarationUntypedDesignation.checkDesignationsConsistency(includeNonClassTarget: Boolean) {
+    val includeTarget = includeNonClassTarget && declaration !is FirClass<*>
+    for (declaration in toSequence(includeTarget = includeTarget)) {
+        if (declaration is FirClass<*>) {
+            val minimumPhaseDeclaration = declaration.declarations.minByOrNull { it.resolvePhase } ?: continue
+            check(declaration.resolvePhase <= minimumPhaseDeclaration.resolvePhase) {
+                "Parent phase ${declaration.resolvePhase} should not be greater than minimum children phase ${minimumPhaseDeclaration.resolvePhase}"
+            }
+        }
+    }
+}

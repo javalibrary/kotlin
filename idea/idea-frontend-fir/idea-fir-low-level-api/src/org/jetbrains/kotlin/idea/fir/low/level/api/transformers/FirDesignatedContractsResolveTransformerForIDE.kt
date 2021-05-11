@@ -12,6 +12,8 @@ import org.jetbrains.kotlin.fir.resolve.ScopeSession
 import org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirDeclarationsResolveTransformer
 import org.jetbrains.kotlin.fir.resolve.transformers.contracts.FirContractResolveTransformer
 import org.jetbrains.kotlin.idea.fir.low.level.api.api.FirDeclarationUntypedDesignationWithFile
+import org.jetbrains.kotlin.idea.fir.low.level.api.util.checkDesignationsConsistency
+import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensurePhase
 import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensureTargetPhase
 
 internal class FirDesignatedContractsResolveTransformerForIDE(
@@ -29,11 +31,10 @@ internal class FirDesignatedContractsResolveTransformerForIDE(
         }
     }
 
-
-    @Suppress("NAME_SHADOWING")
     override fun transformDeclarationContent(declaration: FirDeclaration, data: ResolutionMode): FirDeclaration =
         ideDeclarationTransformer.transformDeclarationContent(this, declaration, data) {
             super.transformDeclarationContent(declaration, data)
+                .updateClassIfContentResolved(FirResolvePhase.CONTRACTS)
         }
 
     override fun needReplacePhase(firDeclaration: FirDeclaration): Boolean = ideDeclarationTransformer.needReplacePhase
@@ -46,9 +47,10 @@ internal class FirDesignatedContractsResolveTransformerForIDE(
             typeAlias.replaceResolvePhase(FirResolvePhase.CONTRACTS)
             return
         }
-        designation.ensureTargetPhase(FirResolvePhase.STATUS)
+        designation.ensurePhase(FirResolvePhase.STATUS)
         designation.firFile.transform<FirFile, ResolutionMode>(this, ResolutionMode.ContextIndependent)
         ideDeclarationTransformer.ensureDesignationPassed()
         designation.ensureTargetPhase(FirResolvePhase.CONTRACTS)
+        designation.checkDesignationsConsistency(includeNonClassTarget = true)
     }
 }
