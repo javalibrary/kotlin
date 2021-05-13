@@ -3286,6 +3286,10 @@ RUNTIME_NOTHROW void ReleaseHeapRefNoCollectRelaxed(const ObjHeader* object) {
   releaseHeapRef<false, /* CanCollect = */ false>(const_cast<ObjHeader*>(object));
 }
 
+RUNTIME_NOTHROW OBJ_GETTER(TryRef, ObjHeader* object) {
+    RuntimeFail("Only for experimental MM");
+}
+
 ForeignRefContext InitLocalForeignRef(ObjHeader* object) {
   return initLocalForeignRef(object);
 }
