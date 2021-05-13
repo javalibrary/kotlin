@@ -13,10 +13,6 @@ bool TryAddHeapRef(const ObjHeader* object) {
     TODO();
 }
 
-RUNTIME_NOTHROW void ReleaseHeapRef(const ObjHeader* object) {
-    TODO();
-}
-
 RUNTIME_NOTHROW void ReleaseHeapRefNoCollect(const ObjHeader* object) {
     TODO();
 }
