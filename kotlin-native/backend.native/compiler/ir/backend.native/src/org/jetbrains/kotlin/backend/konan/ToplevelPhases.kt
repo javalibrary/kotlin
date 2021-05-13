@@ -191,6 +191,7 @@ internal val allLoweringsPhase = NamedCompilerPhase(
                 arrayConstructorPhase then
                 lateinitPhase then
                 sharedVariablesPhase then
+                inventNamesForLocalClasses then
                 extractLocalClassesFromInlineBodies then
                 inlinePhase then
                 provisionalFunctionExpressionPhase then
