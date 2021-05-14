@@ -11,7 +11,8 @@
 
 #if KONAN_OBJC_INTEROP
 
-extern "C" ALWAYS_INLINE void Kotlin_ObjCExport_releaseAssociatedObject(void* associatedObject);
+extern "C" ALWAYS_INLINE void Kotlin_ObjCExport_releaseAssociatedObject(void* associatedObject, bool detach);
+extern "C" ALWAYS_INLINE void Kotlin_ObjCExport_detachAssociatedObject(void* associatedObject);
 
 namespace konan {
 class AutoreleasePool : private kotlin::Pinned {

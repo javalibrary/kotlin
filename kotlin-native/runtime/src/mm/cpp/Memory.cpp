@@ -384,7 +384,6 @@ extern "C" RUNTIME_NOTHROW OBJ_GETTER(TryRef, ObjHeader* object) {
     //       * during marking phase if `object` is marked: return `object`;
     //       * during sweeping phase if `object` is unmarked: return nullptr;
     //       * during sweeping phase if `object` is marked: return `object`;
-    // TODO: When running finalizers needs to return nullptr.
     RETURN_OBJ(object);
 }
 

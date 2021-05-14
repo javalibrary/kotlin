@@ -3137,7 +3137,7 @@ void ObjHeader::destroyMetaObject(ObjHeader* object) {
   }
 
 #ifdef KONAN_OBJC_INTEROP
-  Kotlin_ObjCExport_releaseAssociatedObject(meta->associatedObject_);
+  Kotlin_ObjCExport_releaseAssociatedObject(meta->associatedObject_, /* detach = */ true);
 #endif
 
   konanFreeMemory(meta);

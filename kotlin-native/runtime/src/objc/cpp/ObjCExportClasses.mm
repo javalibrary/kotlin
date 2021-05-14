@@ -98,7 +98,7 @@ static void injectToRuntime();
       id old = AtomicCompareAndSwapAssociatedObject(obj, nullptr, candidate);
       if (old != nullptr) {
         candidate->refHolder.releaseRef();
-        [candidate releaseAsAssociatedObject];
+        [candidate releaseAsAssociatedObject:YES];
         return objc_retainAutoreleaseReturnValue(old);
       }
     }
@@ -132,18 +132,29 @@ static void injectToRuntime();
   }
 }
 
--(void)releaseAsAssociatedObject {
+-(void)detachAsAssociatedObject {
+  // This is called by M&S GC during the sweep phase, so that the object could not possibly
+  // resurrect after being placed into a finalizer queue.
+  refHolder.detach();
+}
+
+-(void)releaseAsAssociatedObject:(BOOL)detach {
   // This function is called by the GC. It made a decision to reclaim Kotlin object, and runs
   // deallocation hooks at the moment, including deallocation of the "associated object" ([self])
   // using the [super release] call below.
 
-  // The deallocation involves running [self dealloc] which can contain arbitrary code.
-  // In particular, this code can retain and release [self]. Obj-C and Swift runtimes handle this
-  // gracefully (unless the object gets accessed after the deallocation of course), but Kotlin doesn't.
-  // Generally retaining and releasing Kotlin object that is being deallocated would lead to
-  // use-after-dispose and double-dispose problems (with unpredictable consequences) or to an assertion failure.
-  // To workaround this, detach the back ref from the Kotlin object:
-  refHolder.detach();
+  if (detach) {
+    // The deallocation involves running [self dealloc] which can contain arbitrary code.
+    // In particular, this code can retain and release [self]. Obj-C and Swift runtimes handle this
+    // gracefully (unless the object gets accessed after the deallocation of course), but Kotlin doesn't.
+    // Generally retaining and releasing Kotlin object that is being deallocated would lead to
+    // use-after-dispose and double-dispose problems (with unpredictable consequences) or to an assertion failure.
+    // To workaround this, detach the back ref from the Kotlin object:
+    refHolder.detach();
+  } else {
+    // With Mark&Sweep this object should already have been detached earlier.
+    refHolder.assertDetached();
+  }
   // So retain/release/etc. on [self] won't affect the Kotlin object, and an attempt to get
   // the reference to it (e.g. when calling Kotlin method on [self]) would crash.
   // The latter is generally ok because can be triggered only by user-defined Swift/Obj-C
@@ -167,7 +178,10 @@ static void injectToRuntime();
   RETURN_RESULT_OF(Kotlin_ObjCExport_convertUnmappedObjCObject, self);
 }
 
--(void)releaseAsAssociatedObject {
+-(void)detachAsAssociatedObject {
+}
+
+-(void)releaseAsAssociatedObject:(BOOL)detach {
   objc_release(self);
 }
 @end;
@@ -240,7 +254,10 @@ static void injectToRuntime() {
   Kotlin_ObjCExport_toKotlinSelector = @selector(toKotlin:);
 
   RuntimeCheck(Kotlin_ObjCExport_releaseAsAssociatedObjectSelector == nullptr, errorMessage);
-  Kotlin_ObjCExport_releaseAsAssociatedObjectSelector = @selector(releaseAsAssociatedObject);
+  Kotlin_ObjCExport_releaseAsAssociatedObjectSelector = @selector(releaseAsAssociatedObject:);
+
+  RuntimeCheck(Kotlin_ObjCExport_detachAsAssociatedObjectSelector == nullptr, errorMessage);
+  Kotlin_ObjCExport_detachAsAssociatedObjectSelector = @selector(detachAsAssociatedObject);
 }
 
 #endif // KONAN_OBJC_INTEROP

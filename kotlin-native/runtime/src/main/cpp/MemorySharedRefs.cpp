@@ -194,6 +194,10 @@ void BackRefFromAssociatedObject::detach() {
   obj_ = nullptr; // Handled in addRef/tryAddRef/releaseRef/ref.
 }
 
+ALWAYS_INLINE void BackRefFromAssociatedObject::assertDetached() {
+    RuntimeAssert(obj_ == nullptr, "Expecting this=%p to be detached, but found obj_=%p", this, obj_);
+}
+
 template <ErrorPolicy errorPolicy>
 ObjHeader* BackRefFromAssociatedObject::ref() const {
   RuntimeAssert(obj_ != nullptr, "no valid Kotlin object found");

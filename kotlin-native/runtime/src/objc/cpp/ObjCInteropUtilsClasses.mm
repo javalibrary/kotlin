@@ -72,8 +72,12 @@ void objc_release(id obj);
   @public id referred;
 }
 
+-(void)detachAsAssociatedObject {
+  // TODO: Should it actually do `objc_destroyWeak`?
+}
+
 // Called when removing Kotlin object.
--(void)releaseAsAssociatedObject {
+-(void)releaseAsAssociatedObject:(BOOL)detach {
   objc_destroyWeak(&referred);
   objc_release(self);
 }
