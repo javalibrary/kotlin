@@ -16,10 +16,12 @@ import org.jetbrains.kotlin.resolve.descriptorUtil.getAllSuperClassifiers
 class ApproximatingStringTable : StringTableImpl() {
     override fun getLocalClassIdReplacement(descriptor: ClassifierDescriptorWithTypeParameters): ClassId? {
         return if (DescriptorUtils.isLocal(descriptor)) {
-            descriptor.getAllSuperClassifiers().firstOrNull()?.classId
-                ?: ClassId.topLevel(StandardNames.FqNames.any.toSafe())
+            ClassId.topLevel(StandardNames.FqNames.any.toSafe())
         } else {
             super.getLocalClassIdReplacement(descriptor)
         }
     }
+
+    override val isLocalClassIdReplacementKeptGeneric: Boolean
+        get() = false
 }

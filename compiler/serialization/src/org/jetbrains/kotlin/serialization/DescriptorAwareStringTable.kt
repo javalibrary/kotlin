@@ -17,20 +17,38 @@ interface DescriptorAwareStringTable : StringTable {
         getQualifiedClassNameIndex(classId.asString(), classId.isLocal)
 
     fun getFqNameIndex(descriptor: ClassifierDescriptorWithTypeParameters): Int {
+        return doGetFqNameIndex(descriptor).first
+    }
+
+    fun getFqNameIndexReplacementAware(descriptor: ClassifierDescriptorWithTypeParameters): FqNameIndexWithLocalReplacementInfo {
+        val (index, isClassIdReplaced) = doGetFqNameIndex(descriptor)
+        return FqNameIndexWithLocalReplacementInfo(index, isClassIdReplaced, isLocalClassIdReplacementKeptGeneric)
+    }
+
+    fun getLocalClassIdReplacement(descriptor: ClassifierDescriptorWithTypeParameters): ClassId? = null
+
+    val isLocalClassIdReplacementKeptGeneric: Boolean
+
+    private fun doGetFqNameIndex(descriptor: ClassifierDescriptorWithTypeParameters): Pair<Int, Boolean> {
         if (ErrorUtils.isError(descriptor)) {
             throw IllegalStateException("Cannot get FQ name of error class: ${renderDescriptor(descriptor)}")
         }
 
+        var replaced = false
         val classId = descriptor.classId
-            ?: getLocalClassIdReplacement(descriptor)
+            ?: getLocalClassIdReplacement(descriptor)?.also { replaced = true }
             ?: throw IllegalStateException("Cannot get FQ name of local class: ${renderDescriptor(descriptor)}")
 
-        return getQualifiedClassNameIndex(classId)
+        return getQualifiedClassNameIndex(classId) to replaced
     }
-
-    fun getLocalClassIdReplacement(descriptor: ClassifierDescriptorWithTypeParameters): ClassId? = null
 
     private fun renderDescriptor(descriptor: ClassifierDescriptorWithTypeParameters): String =
         DescriptorRenderer.COMPACT.render(descriptor) + " defined in " +
                 DescriptorRenderer.FQ_NAMES_IN_TYPES.render(descriptor.containingDeclaration)
 }
+
+data class FqNameIndexWithLocalReplacementInfo(
+    val fqNameIndex: Int,
+    val isClassIdReplaced: Boolean,
+    val isReplacementKeptGeneric: Boolean,
+)
