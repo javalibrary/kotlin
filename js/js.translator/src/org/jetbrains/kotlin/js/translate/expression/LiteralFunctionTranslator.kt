@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.descriptors.*
 import org.jetbrains.kotlin.descriptors.impl.ValueParameterDescriptorImpl
 import org.jetbrains.kotlin.js.backend.ast.*
 import org.jetbrains.kotlin.js.backend.ast.metadata.*
+import org.jetbrains.kotlin.js.config.JSConfigurationKeys
 import org.jetbrains.kotlin.js.descriptorUtils.isCoroutineLambda
 import org.jetbrains.kotlin.js.inline.util.FunctionWithWrapper
 import org.jetbrains.kotlin.js.inline.util.getInnerFunction
@@ -80,7 +81,14 @@ class LiteralFunctionTranslator(context: TranslationContext) : AbstractTranslato
             name.staticRef = lambdaCreator
             lambdaCreator.fillCoroutineMetadata(invokingContext, descriptor)
             lambdaCreator.source = declaration
-            return lambdaCreator.withCapturedParameters(functionContext, name, invokingContext, declaration)
+
+            return lambdaCreator.withCapturedParameters(functionContext, name, invokingContext, declaration).also {
+                val lambdaInterceptor = if (descriptor.isInline) "" else context().config.configuration.get(JSConfigurationKeys.LAMBDA_INTERCEPTOR) ?: ""
+                if (lambdaInterceptor != "") {
+                    val ret = lambdaCreator.body.statements.single() as JsReturn
+                    ret.expression = JsInvocation(JsNameRef(lambdaInterceptor), lambdaCreator.name.makeRef(), JsArrayLiteral(lambdaCreator.parameters.map { it.name.makeRef() }), ret.expression)
+                }
+            }
         }
 
         if (descriptor in tracker.capturedDescriptors) {
