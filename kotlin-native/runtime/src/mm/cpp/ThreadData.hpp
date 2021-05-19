@@ -15,6 +15,7 @@
 #include "ObjectFactory.hpp"
 #include "ShadowStack.hpp"
 #include "StableRefRegistry.hpp"
+#include "ThreadSuspensionData.h"
 #include "ThreadLocalStorage.hpp"
 #include "Types.h"
 #include "Utils.hpp"
@@ -32,9 +33,9 @@ public:
         threadId_(threadId),
         globalsThreadQueue_(GlobalsRegistry::Instance()),
         stableRefThreadQueue_(StableRefRegistry::Instance()),
-        state_(ThreadState::kRunnable),
         gc_(GlobalData::Instance().gc()),
-        objectFactoryThreadQueue_(GlobalData::Instance().objectFactory(), gc_) {}
+        objectFactoryThreadQueue_(GlobalData::Instance().objectFactory(), gc_),
+        suspensionData_(ThreadState::kRunnable) {}
 
     ~ThreadData() = default;
 
@@ -46,9 +47,9 @@ public:
 
     StableRefRegistry::ThreadQueue& stableRefThreadQueue() noexcept { return stableRefThreadQueue_; }
 
-    ThreadState state() noexcept { return state_; }
+    ThreadState state() noexcept { return suspensionData_.state(); }
 
-    ThreadState setState(ThreadState state) noexcept { return state_.exchange(state); }
+    ThreadState setState(ThreadState state) noexcept { return suspensionData_.setState(state); }
 
     ObjectFactory<gc::GC>::ThreadQueue& objectFactoryThreadQueue() noexcept { return objectFactoryThreadQueue_; }
 
@@ -58,9 +59,7 @@ public:
 
     gc::GC::ThreadData& gc() noexcept { return gc_; }
 
-    std::condition_variable& suspendCondition() { return suspendCondition_; }
-
-    std::mutex& suspendMutex() { return suspendMutex_; }
+    ThreadSuspensionData& suspensionData() noexcept { return suspensionData_; }
 
     void Publish() noexcept {
         // TODO: These use separate locks, which is inefficient.
@@ -80,13 +79,11 @@ private:
     GlobalsRegistry::ThreadQueue globalsThreadQueue_;
     ThreadLocalStorage tls_;
     StableRefRegistry::ThreadQueue stableRefThreadQueue_;
-    std::atomic<ThreadState> state_;
     ShadowStack shadowStack_;
     gc::GC::ThreadData gc_;
     ObjectFactory<gc::GC>::ThreadQueue objectFactoryThreadQueue_;
     KStdVector<std::pair<ObjHeader**, ObjHeader*>> initializingSingletons_;
-    std::condition_variable suspendCondition_;
-    std::mutex suspendMutex_;
+    ThreadSuspensionData suspensionData_;
 };
 
 } // namespace mm

@@ -46,12 +46,13 @@ bool kotlin::mm::IsThreadSuspensionRequested() {
 
 void kotlin::mm::SuspendThreadIfRequested(ThreadData* threadData) {
     if (IsThreadSuspensionRequested()) {
-        std::unique_lock lock(threadData->suspendMutex());
+        auto& suspensionData = threadData->suspensionData();
+        std::unique_lock lock(suspensionData.mutex());
 
         if (IsThreadSuspensionRequested()) {
             AssertThreadState(threadData, {ThreadState::kRunnable, ThreadState::kNative});
             ThreadStateGuard stateGuard(ThreadState::kSuspended);
-            threadData->suspendCondition().wait(lock, []() { return !IsThreadSuspensionRequested(); });
+            suspensionData.conditionVar().wait(lock, []() { return !IsThreadSuspensionRequested(); });
         }
     }
 }
@@ -72,9 +73,10 @@ void kotlin::mm::ResumeThreads() {
     {
         auto threads = ThreadRegistry::Instance().Iter();
         for (auto& thread : threads) {
-            std::unique_lock lock(thread.suspendMutex());
+            auto& suspensionData = thread.suspensionData();
+            std::unique_lock lock(suspensionData.mutex());
             if (thread.state() == ThreadState::kSuspended) {
-                thread.suspendCondition().notify_one();
+                suspensionData.conditionVar().notify_one();
             }
         }
     }

@@ -17,7 +17,6 @@ namespace kotlin {
 namespace internal {
 
 ALWAYS_INLINE inline bool isStateSwitchAllowed(ThreadState oldState, ThreadState newState, bool reentrant) noexcept  {
-    // TODO: May be forbid SUSPEND -> NATIVE switch?
     return oldState != newState || reentrant;
 }
 
@@ -56,14 +55,7 @@ ALWAYS_INLINE inline void AssertThreadState(mm::ThreadData* threadData, ThreadSt
 
 ALWAYS_INLINE inline void AssertThreadState(mm::ThreadData* threadData, std::initializer_list<ThreadState> expected) noexcept {
     auto actual = threadData->state();
-    bool expectedContainsActual = false;
-    for (auto state : expected) {
-        if (state == actual) {
-            expectedContainsActual = true;
-            break;
-        }
-    }
-    RuntimeAssert(expectedContainsActual,
+    RuntimeAssert(std::any_of(expected.begin(), expected.end(), [actual](ThreadState expected) { return expected == actual; }),
                   "Unexpected thread state. Expected one of: %s. Actual: %s",
                   internal::statesToString(expected).c_str(), ThreadStateName(actual));
 }
