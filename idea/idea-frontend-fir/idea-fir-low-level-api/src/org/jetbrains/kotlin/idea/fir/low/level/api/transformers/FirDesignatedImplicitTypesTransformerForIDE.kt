@@ -16,8 +16,6 @@ import org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.createReturnTy
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
 import org.jetbrains.kotlin.idea.fir.low.level.api.api.FirDeclarationUntypedDesignationWithFile
 import org.jetbrains.kotlin.idea.fir.low.level.api.element.builder.FirIdeDesignatedBodyResolveTransformerForReturnTypeCalculator
-import org.jetbrains.kotlin.idea.fir.low.level.api.util.checkDesignationsConsistency
-import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensurePhase
 import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensureTargetPhase
 
 internal class FirDesignatedImplicitTypesTransformerForIDE(
@@ -50,24 +48,75 @@ internal class FirDesignatedImplicitTypesTransformerForIDE(
 
     override fun needReplacePhase(firDeclaration: FirDeclaration): Boolean = ideDeclarationTransformer.needReplacePhase
 
+    private fun FirDeclaration.updatePhaseIfNeeded() {
+        require(resolvePhase >= FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE || resolvePhase == FirResolvePhase.CONTRACTS)
+        if (ideDeclarationTransformer.needReplacePhase && resolvePhase < FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE) {
+            replaceResolvePhase(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE)
+        }
+    }
+
+    override fun transformAnonymousInitializer(anonymousInitializer: FirAnonymousInitializer, data: ResolutionMode): FirDeclaration {
+        return super.transformAnonymousInitializer(anonymousInitializer, data).also {
+            it.updatePhaseIfNeeded()
+        }
+    }
+
+    override fun transformProperty(property: FirProperty, data: ResolutionMode): FirProperty {
+        return super.transformProperty(property, data).also {
+            if (it.returnTypeRef is FirResolvedTypeRef) it.updatePhaseIfNeeded()
+        }
+    }
+
+    override fun transformSimpleFunction(simpleFunction: FirSimpleFunction, data: ResolutionMode): FirSimpleFunction {
+        return super.transformSimpleFunction(simpleFunction, data).also {
+            if (it.returnTypeRef is FirResolvedTypeRef) it.updatePhaseIfNeeded()
+        }
+    }
+
+    override fun transformField(field: FirField, data: ResolutionMode): FirDeclaration {
+        return super.transformField(field, data).also {
+            if (field.returnTypeRef is FirResolvedTypeRef) it.updatePhaseIfNeeded()
+        }
+    }
+
+    override fun transformConstructor(constructor: FirConstructor, data: ResolutionMode): FirDeclaration {
+        return super.transformConstructor(constructor, data).also {
+            it.updatePhaseIfNeeded()
+        }
+    }
+
+    override fun transformTypeAlias(typeAlias: FirTypeAlias, data: ResolutionMode): FirDeclaration {
+        return super.transformTypeAlias(typeAlias, data).also {
+            it.updatePhaseIfNeeded()
+        }
+    }
+
+//    private fun FirDeclaration.fixUpStatusForDeclaration() {
+//        when (this) {
+//            is FirCallableDeclaration<*> -> {
+//                //We don't need resolve callable declaration if it is already resolved (for ex. with TYPES)
+//                if (this is FirConstructor || returnTypeRef is FirResolvedTypeRef) {
+//                    replaceResolvePhase(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE)
+//                    return
+//                }
+//            }
+//            is FirTypeAlias -> {
+//                //Nothing to do with type alias to this phase
+//                replaceResolvePhase(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE)
+//                return
+//            }
+//            else -> { }
+//        }
+//    }
+
     override fun transformDeclaration() {
         if (designation.declaration.resolvePhase >= FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE) return
         designation.ensureTargetPhase(FirResolvePhase.CONTRACTS)
 
-        when (val declaration = designation.declaration) {
-            is FirCallableDeclaration<*> -> {
-                //We don't need resolve callable declaration if it is already resolved (for ex. with TYPES)
-                if (declaration.returnTypeRef is FirResolvedTypeRef) {
-                    declaration.replaceResolvePhase(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE)
-                    return
-                }
-            }
-            is FirTypeAlias -> {
-                //Nothing to do with type alias to this phase
-                declaration.replaceResolvePhase(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE)
-                return
-            }
-        }
+//        designation.declaration.containingDeclarations().forEach {
+//            it.fixUpStatusForDeclaration()
+//        }
+//        designation.declaration.fixUpStatusForDeclaration()
 
         designation.firFile.transform<FirFile, ResolutionMode>(this, ResolutionMode.ContextIndependent)
         ideDeclarationTransformer.ensureDesignationPassed()
@@ -78,6 +127,5 @@ internal class FirDesignatedImplicitTypesTransformerForIDE(
         }
 
         designation.ensureTargetPhase(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE)
-        designation.checkDesignationsConsistency(includeNonClassTarget = true)
     }
 }

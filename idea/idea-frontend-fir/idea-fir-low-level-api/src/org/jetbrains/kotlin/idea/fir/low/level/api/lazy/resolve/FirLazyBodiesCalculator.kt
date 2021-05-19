@@ -41,15 +41,13 @@ internal object FirLazyBodiesCalculator {
     }
 
     fun calculateLazyBodiesForFunction(designation: FirDeclarationDesignation<FirSimpleFunction>) {
-        require(!designation.isLocalDesignation) { "Not supported for local designations" }
         val simpleFunction = designation.declaration
         if (simpleFunction.body !is FirLazyBlock) return
-        val newFunction = RawFirNonLocalDeclarationBuilder.build(
+        val newFunction = RawFirNonLocalDeclarationBuilder.buildWithRebind(
             session = simpleFunction.moduleData.session,
-            baseScopeProvider = simpleFunction.moduleData.session.firIdeProvider.kotlinScopeProvider,
+            scopeProvider = simpleFunction.moduleData.session.firIdeProvider.kotlinScopeProvider,
             designation = designation,
             rootNonLocalDeclaration = simpleFunction.psi as KtNamedFunction,
-            functionsToRebind = setOf(simpleFunction)
         ) as FirSimpleFunction
         simpleFunction.apply {
             replaceBody(newFunction.body)
@@ -63,12 +61,11 @@ internal object FirLazyBodiesCalculator {
         require(!secondaryConstructor.isPrimary)
         if (secondaryConstructor.body !is FirLazyBlock) return
 
-        val newFunction = RawFirNonLocalDeclarationBuilder.build(
+        val newFunction = RawFirNonLocalDeclarationBuilder.buildWithRebind(
             session = secondaryConstructor.moduleData.session,
-            baseScopeProvider = secondaryConstructor.moduleData.session.firIdeProvider.kotlinScopeProvider,
+            scopeProvider = secondaryConstructor.moduleData.session.firIdeProvider.kotlinScopeProvider,
             designation = designation,
             rootNonLocalDeclaration = secondaryConstructor.psi as KtSecondaryConstructor,
-            functionsToRebind = setOf(secondaryConstructor),
         ) as FirSimpleFunction
 
         secondaryConstructor.apply {
@@ -81,12 +78,11 @@ internal object FirLazyBodiesCalculator {
         val firProperty = designation.declaration
         if (!needCalculatingLazyBodyForProperty(firProperty)) return
 
-        val newProperty = RawFirNonLocalDeclarationBuilder.build(
+        val newProperty = RawFirNonLocalDeclarationBuilder.buildWithRebind(
             session = firProperty.moduleData.session,
-            baseScopeProvider = firProperty.moduleData.session.firIdeProvider.kotlinScopeProvider,
+            scopeProvider = firProperty.moduleData.session.firIdeProvider.kotlinScopeProvider,
             designation = designation,
-            rootNonLocalDeclaration = firProperty.psi as KtProperty,
-            functionsToRebind = setOfNotNull(firProperty.getter, firProperty.setter),
+            rootNonLocalDeclaration = firProperty.psi as KtProperty
         ) as FirProperty
 
         firProperty.getter?.takeIf { it.body is FirLazyBlock }?.let { getter ->

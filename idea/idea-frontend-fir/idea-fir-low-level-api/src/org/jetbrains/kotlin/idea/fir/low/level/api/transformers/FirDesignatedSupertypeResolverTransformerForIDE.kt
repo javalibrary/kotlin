@@ -7,18 +7,19 @@ package org.jetbrains.kotlin.idea.fir.low.level.api.transformers
 
 import org.jetbrains.kotlin.fir.FirElement
 import org.jetbrains.kotlin.fir.FirSession
-import org.jetbrains.kotlin.fir.declarations.*
-import org.jetbrains.kotlin.fir.expressions.FirStatement
-import org.jetbrains.kotlin.fir.resolve.ResolutionMode
+import org.jetbrains.kotlin.fir.declarations.FirClass
+import org.jetbrains.kotlin.fir.declarations.FirDeclaration
+import org.jetbrains.kotlin.fir.declarations.FirResolvePhase
+import org.jetbrains.kotlin.fir.declarations.FirTypeAlias
 import org.jetbrains.kotlin.fir.resolve.ScopeSession
 import org.jetbrains.kotlin.fir.resolve.transformers.FirApplySupertypesTransformer
 import org.jetbrains.kotlin.fir.resolve.transformers.FirProviderInterceptor
 import org.jetbrains.kotlin.fir.resolve.transformers.FirSupertypeResolverVisitor
 import org.jetbrains.kotlin.fir.resolve.transformers.SupertypeComputationSession
+import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
+import org.jetbrains.kotlin.idea.fir.low.level.api.api.FirDeclarationUntypedDesignation
 import org.jetbrains.kotlin.idea.fir.low.level.api.api.FirDeclarationUntypedDesignationWithFile
-import org.jetbrains.kotlin.idea.fir.low.level.api.util.checkDesignationsConsistency
-import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensurePathPhase
-import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensureTargetPhaseIfClass
+import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensureTargetPhase
 
 internal class FirDesignatedSupertypeResolverTransformerForIDE(
     private val designation: FirDeclarationUntypedDesignationWithFile,
@@ -29,101 +30,84 @@ internal class FirDesignatedSupertypeResolverTransformerForIDE(
 
     private val supertypeComputationSession = SupertypeComputationSession()
 
-    private inner class DesignatedFirSupertypeResolverVisitor : FirSupertypeResolverVisitor(
-        session = session,
-        supertypeComputationSession = supertypeComputationSession,
-        scopeSession = scopeSession,
-        scopeForLocalClass = null,
-        localClassesNavigationInfo = null,
-        firProviderInterceptor = firProviderInterceptor,
-    ) {
-        private val designationChecker = DesignationChecker(designation)
-        val targetApplied get() = designationChecker.targetIsVisited
+    private inner class DesignatedFirSupertypeResolverVisitor(classDesignation: FirDeclarationUntypedDesignation) :
+        FirSupertypeResolverVisitor(
+            session = session,
+            supertypeComputationSession = supertypeComputationSession,
+            scopeSession = scopeSession,
+            scopeForLocalClass = null,
+            localClassesNavigationInfo = null,
+            firProviderInterceptor = firProviderInterceptor,
+        ) {
+        val declarationTransformer = IDEDeclarationTransformer(classDesignation)
 
-        override fun visitAnonymousObject(anonymousObject: FirAnonymousObject, data: Any?) {
-            designationChecker.whenInDesignation(anonymousObject) { super.visitAnonymousObject(anonymousObject, data) }
-        }
-
-        override fun visitProperty(property: FirProperty, data: Any?) {
-            designationChecker.whenInDesignation(property) { super.visitProperty(property, data) }
-        }
-
-        override fun visitSimpleFunction(simpleFunction: FirSimpleFunction, data: Any?) {
-            designationChecker.whenInDesignation(simpleFunction) { super.visitSimpleFunction(simpleFunction, data) }
-        }
-
-        override fun visitTypeAlias(typeAlias: FirTypeAlias, data: Any?) {
-            designationChecker.whenInDesignation(typeAlias) { super.visitTypeAlias(typeAlias, data) }
-        }
-
-        override fun visitConstructor(constructor: FirConstructor, data: Any?) {
-            designationChecker.whenInDesignation(constructor) { super.visitConstructor(constructor, data) }
-        }
-
-        override fun visitRegularClass(regularClass: FirRegularClass, data: Any?) {
-            designationChecker.whenInDesignation(regularClass) { super.visitRegularClass(regularClass, data) }
+        override fun visitDeclarationContent(declaration: FirDeclaration, data: Any?) {
+            declarationTransformer.visitDeclarationContent(this, declaration, data) {
+                super.visitDeclarationContent(declaration, data)
+                declaration
+            }
         }
     }
 
-    private inner class DesignatedFirApplySupertypesTransformer :
+    private inner class DesignatedFirApplySupertypesTransformer(classDesignation: FirDeclarationUntypedDesignation) :
         FirApplySupertypesTransformer(supertypeComputationSession) {
 
-        private val designationChecker = DesignationChecker(designation)
-        val targetApplied get() = designationChecker.targetIsVisited
+        val declarationTransformer = IDEDeclarationTransformer(classDesignation)
 
-        override val needToApplyResolvePhase: Boolean
-            get() = designationChecker.isInTargetDeclaration
+        override fun needReplacePhase(firDeclaration: FirDeclaration): Boolean = declarationTransformer.needReplacePhase
 
-        override fun transformRegularClass(regularClass: FirRegularClass, data: Any?): FirStatement =
-            designationChecker.whenInDesignation(regularClass) { super.transformRegularClass(regularClass, data) }.also {
-                it.updateClassIfContentResolved(FirResolvePhase.SUPER_TYPES)
+        override fun transformDeclarationContent(declaration: FirDeclaration, data: Any?): FirDeclaration {
+            return declarationTransformer.transformDeclarationContent(this, declaration, data) {
+                super.transformDeclarationContent(declaration, data)
+            }.updateClassIfContentResolved(FirResolvePhase.SUPER_TYPES)
+        }
+
+        override fun transformTypeAlias(typeAlias: FirTypeAlias, data: Any?): FirDeclaration {
+            return super.transformTypeAlias(typeAlias, data).also {
+                if (typeAlias.expandedTypeRef is FirResolvedTypeRef) {
+                    typeAlias.replaceResolvePhase(FirResolvePhase.SUPER_TYPES)
+                }
             }
+        }
 
-        override fun transformAnonymousObject(anonymousObject: FirAnonymousObject, data: Any?): FirStatement =
-            designationChecker.whenInDesignation(anonymousObject) { super.transformAnonymousObject(anonymousObject, data) }.also {
-                it.updateClassIfContentResolved(FirResolvePhase.SUPER_TYPES)
+        override fun <E : FirElement> transformElement(element: E, data: Any?): E {
+            if (element is FirDeclaration) {
+                element.replaceResolvePhase(FirResolvePhase.SUPER_TYPES)
             }
-
-        override fun transformAnonymousFunction(anonymousFunction: FirAnonymousFunction, data: Any?): FirStatement =
-            designationChecker.whenInDesignation(anonymousFunction) { super.transformAnonymousFunction(anonymousFunction, data) }
-
-        override fun transformProperty(property: FirProperty, data: Any?): FirDeclaration =
-            designationChecker.whenInDesignation(property) { super.transformProperty(property, data) }
-
-        override fun transformSimpleFunction(simpleFunction: FirSimpleFunction, data: Any?): FirDeclaration =
-            designationChecker.whenInDesignation(simpleFunction) { super.transformSimpleFunction(simpleFunction, data) }
-
-        override fun transformTypeAlias(typeAlias: FirTypeAlias, data: Any?): FirDeclaration =
-            designationChecker.whenInDesignation(typeAlias) { super.transformTypeAlias(typeAlias, data) }
-
-        override fun transformConstructor(constructor: FirConstructor, data: Any?): FirDeclaration =
-            designationChecker.whenInDesignation(constructor) { super.transformConstructor(constructor, data) }
+            return element
+        }
     }
 
     override fun transformDeclaration() {
         if (designation.declaration.resolvePhase >= FirResolvePhase.SUPER_TYPES) return
-        if (designation.declaration is FirTypeAlias) {
-            designation.declaration.replaceResolvePhase(FirResolvePhase.SUPER_TYPES)
-            return
-        }
+
         check(designation.firFile.resolvePhase >= FirResolvePhase.IMPORTS) {
             "Invalid resolve phase of file. Should be IMPORTS but found ${designation.firFile.resolvePhase}"
         }
 
-        val resolver = DesignatedFirSupertypeResolverVisitor()
+        val notResolvableToSuperTypes = designation.declaration !is FirClass<*> && designation.declaration !is FirTypeAlias
+
+        if (notResolvableToSuperTypes) {
+            designation.declaration.replaceResolvePhase(FirResolvePhase.SUPER_TYPES)
+            return
+        }
+
+        val classDesignation = if (notResolvableToSuperTypes) {
+            FirDeclarationUntypedDesignation(
+                path = designation.path.dropLast(1),
+                declaration = designation.path.last(),
+                isLocalDesignation = false
+            )
+        } else designation
+
+        val resolver = DesignatedFirSupertypeResolverVisitor(classDesignation)
         designation.firFile.accept(resolver, null)
-        if (!resolver.targetApplied) {
-            designation.declaration.accept(resolver, null)
-        }
+        resolver.declarationTransformer.ensureDesignationPassed()
 
-        val applier = DesignatedFirApplySupertypesTransformer()
+        val applier = DesignatedFirApplySupertypesTransformer(classDesignation)
         designation.firFile.transform<FirElement, Void?>(applier, null)
-        if (!applier.targetApplied) {
-            designation.declaration.transform<FirElement, Void?>(applier, null)
-        }
+        applier.declarationTransformer.ensureDesignationPassed()
 
-        designation.ensurePathPhase(FirResolvePhase.SUPER_TYPES)
-        designation.ensureTargetPhaseIfClass(FirResolvePhase.SUPER_TYPES)
-        designation.checkDesignationsConsistency(includeNonClassTarget = false)
+        designation.ensureTargetPhase(FirResolvePhase.SUPER_TYPES)
     }
 }

@@ -11,10 +11,7 @@ import org.jetbrains.kotlin.fir.declarations.*
 import org.jetbrains.kotlin.fir.resolve.ScopeSession
 import org.jetbrains.kotlin.fir.resolve.transformers.FirTypeResolveTransformer
 import org.jetbrains.kotlin.idea.fir.low.level.api.api.FirDeclarationUntypedDesignationWithFile
-import org.jetbrains.kotlin.idea.fir.low.level.api.util.*
-import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensurePathPhase
-import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensurePhase
-import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensureTargetPhaseIfClass
+import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensureTargetPhase
 
 internal class FirDesignatedTypeResolverTransformerForIDE(
     private val designation: FirDeclarationUntypedDesignationWithFile,
@@ -22,24 +19,34 @@ internal class FirDesignatedTypeResolverTransformerForIDE(
     scopeSession: ScopeSession,
 ) : FirLazyTransformerForIDE, FirTypeResolveTransformer(session, scopeSession) {
 
-    private val ideDeclarationTransformer = IDEDeclarationTransformer(designation)
+    private val declarationTransformer = IDEDeclarationTransformer(designation)
+
+    override fun needReplacePhase(firDeclaration: FirDeclaration): Boolean =
+        declarationTransformer.needReplacePhase
 
     override fun <E : FirElement> transformElement(element: E, data: Any?): E {
-        if (element !is FirRegularClass && element !is FirAnonymousObject && element !is FirFile)
-            return super.transformElement(element, data)
-
-        return ideDeclarationTransformer.transformDeclarationContent(this, element, data) {
+        return if (element is FirDeclaration && (element is FirRegularClass || element is FirFile)) {
+            declarationTransformer.transformDeclarationContent(this, element, data) {
+                super.transformElement(element, data)
+            }.updateClassIfContentResolved(FirResolvePhase.TYPES)
+        } else {
             super.transformElement(element, data)
         }
     }
 
+    override fun transformAnonymousInitializer(anonymousInitializer: FirAnonymousInitializer, data: Any?): FirDeclaration {
+        check(anonymousInitializer.resolvePhase >= FirResolvePhase.SUPER_TYPES)
+        if (anonymousInitializer.resolvePhase == FirResolvePhase.SUPER_TYPES) {
+            anonymousInitializer.replaceResolvePhase(FirResolvePhase.TYPES)
+        }
+        return super.transformAnonymousInitializer(anonymousInitializer, data)
+    }
+
     override fun transformDeclaration() {
         if (designation.declaration.resolvePhase >= FirResolvePhase.TYPES) return
-        designation.ensurePathPhase(FirResolvePhase.SUPER_TYPES)
-        designation.ensureTargetPhaseIfClass(FirResolvePhase.SUPER_TYPES)
+        designation.ensureTargetPhase(FirResolvePhase.SUPER_TYPES)
         designation.firFile.transform<FirFile, Any?>(this, null)
-        ideDeclarationTransformer.ensureDesignationPassed()
+        declarationTransformer.ensureDesignationPassed()
         designation.ensureTargetPhase(FirResolvePhase.TYPES)
-        designation.checkDesignationsConsistency(includeNonClassTarget = true)
     }
 }
