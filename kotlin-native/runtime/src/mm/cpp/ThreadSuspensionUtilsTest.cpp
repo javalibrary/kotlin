@@ -5,6 +5,7 @@
 
 #include "MemoryPrivate.hpp"
 #include "ThreadSuspensionUtils.hpp"
+#include "ThreadState.hpp"
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -82,7 +83,7 @@ TEST(ThreadSuspensionTest, SimpleStartStop) {
 
     for (size_t i = 0; i < kThreadCount; i++) {
         threads.emplace_back([&canStart, &shouldStop, &ready, i]() {
-            ScopedRuntimeInit init;
+            ScopedMemoryInit init;
             auto* threadData = init.memoryState()->GetThreadData();
             EXPECT_EQ(mm::IsThreadSuspensionRequested(), false);
 
@@ -139,7 +140,7 @@ TEST(ThreadSuspensionTest, SwitchStateToNative) {
 
     for (size_t i = 0; i < kThreadCount; i++) {
         threads.emplace_back([&canStart, &shouldStop, &ready, i]() {
-            ScopedRuntimeInit init;
+            ScopedMemoryInit init;
             auto* threadData = init.memoryState()->GetThreadData();
             EXPECT_EQ(mm::IsThreadSuspensionRequested(), false);
 
