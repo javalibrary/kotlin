@@ -17,6 +17,7 @@
 #ifndef RUNTIME_MEMORY_H
 #define RUNTIME_MEMORY_H
 
+#include <ostream>
 #include <utility>
 
 #include "KAssert.h"

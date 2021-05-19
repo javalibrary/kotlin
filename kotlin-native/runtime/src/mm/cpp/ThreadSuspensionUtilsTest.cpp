@@ -52,26 +52,6 @@ void reportProgress(size_t currentIteration, size_t totalIterations) {
 
 } // namespace
 
-namespace kotlin {
-
-// TODO: Move to thread state header.
-std::ostream& operator<<(std::ostream& stream, ThreadState state) {
-    switch (state) {
-        case ThreadState::kRunnable:
-            stream << "Runnable";
-            break;
-        case ThreadState::kNative:
-            stream << "Native";
-            break;
-        case ThreadState::kSuspended:
-            stream << "Suspended";
-            break;
-    }
-    return stream;
-}
-
-}
-
 TEST(ThreadSuspensionTest, SimpleStartStop) {
     constexpr size_t kThreadCount = kDefaultThreadCount;
     constexpr size_t kIterations = 10;

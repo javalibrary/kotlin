@@ -7,7 +7,7 @@
 #include "ThreadData.hpp"
 #include "ThreadState.hpp"
 
-const char* kotlin::internal::stateToString(ThreadState state) noexcept {
+const char* kotlin::ThreadStateName(ThreadState state) noexcept {
     switch (state) {
         case ThreadState::kRunnable:
             return "RUNNABLE";
@@ -24,7 +24,7 @@ std::string kotlin::internal::statesToString(std::initializer_list<ThreadState> 
         if (i != 0) {
             result += ", ";
         }
-        result += stateToString(data(states)[i]);
+        result += ThreadStateName(data(states)[i]);
     }
     result += " }";
     return result;

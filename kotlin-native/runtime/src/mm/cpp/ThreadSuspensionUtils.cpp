@@ -66,11 +66,12 @@ void kotlin::mm::SuspendThreads() {
 }
 
 void kotlin::mm::ResumeThreads() {
+    RuntimeAssert(allThreads<isSuspendedOrNative>(), "Some threads are in RUNNABLE state");
+
     gSuspensionRequested = false;
     {
         auto threads = ThreadRegistry::Instance().Iter();
         for (auto& thread : threads) {
-            AssertThreadState(&thread, {ThreadState::kNative, ThreadState::kSuspended});
             std::unique_lock lock(thread.suspendMutex());
             if (thread.state() == ThreadState::kSuspended) {
                 thread.suspendCondition().notify_one();
