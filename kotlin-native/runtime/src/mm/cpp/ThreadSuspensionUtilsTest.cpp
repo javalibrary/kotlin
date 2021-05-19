@@ -95,7 +95,7 @@ TEST(ThreadSuspensionTest, SimpleStartStop) {
                 ready[i] = false;
 
                 EXPECT_EQ(threadData->state(), ThreadState::kRunnable);
-                mm::SuspendCurrentThreadIfRequested();
+                mm::SuspendThreadIfRequested(threadData);
                 EXPECT_EQ(threadData->state(), ThreadState::kRunnable);
            }
         });

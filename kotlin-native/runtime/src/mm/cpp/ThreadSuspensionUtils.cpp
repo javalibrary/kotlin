@@ -44,9 +44,8 @@ bool kotlin::mm::IsThreadSuspensionRequested() {
     return gSuspensionRequested.load(); // TODO: Play with memory orders.
 }
 
-void kotlin::mm::SuspendCurrentThreadIfRequested() {
+void kotlin::mm::SuspendThreadIfRequested(ThreadData* threadData) {
     if (IsThreadSuspensionRequested()) {
-        auto* threadData = ThreadRegistry::Instance().CurrentThreadData();
         std::unique_lock lock(threadData->suspendMutex());
 
         if (IsThreadSuspensionRequested()) {

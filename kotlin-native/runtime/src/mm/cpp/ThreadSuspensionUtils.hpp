@@ -6,11 +6,13 @@
 #ifndef RUNTIME_MM_THREAD_SUSPENSION_UTILS_H
 #define RUNTIME_MM_THREAD_SUSPENSION_UTILS_H
 
+#include "ThreadData.hpp"
+
 namespace kotlin {
 namespace mm {
 
 bool IsThreadSuspensionRequested();
-void SuspendCurrentThreadIfRequested();
+void SuspendThreadIfRequested(ThreadData* threadData);
 
 /**
  * Suspends all threads registered in ThreadRegistry except threads that are in the Native state.

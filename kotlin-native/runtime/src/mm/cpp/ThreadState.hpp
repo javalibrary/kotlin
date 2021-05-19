@@ -35,7 +35,7 @@ ALWAYS_INLINE inline ThreadState SwitchThreadState(mm::ThreadData* threadData, T
                   "Illegal thread state switch. Old state: %s. New state: %s.",
                   internal::stateToString(oldState), internal::stateToString(newState));
     if (oldState == ThreadState::kNative && newState == ThreadState::kRunnable){
-        mm::SuspendCurrentThreadIfRequested();
+        mm::SuspendThreadIfRequested(threadData);
     }
     threadData->setState(newState);
     return oldState;
