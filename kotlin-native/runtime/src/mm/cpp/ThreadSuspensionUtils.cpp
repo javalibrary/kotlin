@@ -51,7 +51,7 @@ void kotlin::mm::SuspendThreadIfRequested(ThreadData* threadData) {
         if (IsThreadSuspensionRequested()) {
             AssertThreadState(threadData, {ThreadState::kRunnable, ThreadState::kNative});
             ThreadStateGuard stateGuard(ThreadState::kSuspended);
-            threadData->suspendCondition().wait(lock);
+            threadData->suspendCondition().wait(lock, []() { return !IsThreadSuspensionRequested(); });
         }
     }
 }
