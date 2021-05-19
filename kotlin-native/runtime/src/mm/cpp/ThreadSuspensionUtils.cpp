@@ -38,18 +38,6 @@ void yield() {
 
 std::atomic<bool> gSuspensionRequested = false;
 
-class LockGuard {
-public:
-    LockGuard(pthread_mutex_t* mutex) : mutex_(mutex) {
-        pthread_mutex_lock(mutex_);
-    }
-    ~LockGuard() {
-        pthread_mutex_unlock(mutex_);
-    }
-private:
-    pthread_mutex_t* mutex_;
-};
-
 } // namespace
 
 bool kotlin::mm::IsThreadSuspensionRequested() {
@@ -59,12 +47,12 @@ bool kotlin::mm::IsThreadSuspensionRequested() {
 void kotlin::mm::SuspendCurrentThreadIfRequested() {
     if (IsThreadSuspensionRequested()) {
         auto* threadData = ThreadRegistry::Instance().CurrentThreadData();
-        LockGuard lock(threadData->suspendMutex());
+        std::unique_lock lock(threadData->suspendMutex());
 
         if (IsThreadSuspensionRequested()) {
             AssertThreadState(threadData, {ThreadState::kRunnable, ThreadState::kNative});
             ThreadStateGuard stateGuard(ThreadState::kSuspended);
-            pthread_cond_wait(threadData->suspendCondition(), threadData->suspendMutex());
+            threadData->suspendCondition().wait(lock);
         }
     }
 }
@@ -84,9 +72,9 @@ void kotlin::mm::ResumeThreads() {
         auto threads = ThreadRegistry::Instance().Iter();
         for (auto& thread : threads) {
             AssertThreadState(&thread, {ThreadState::kNative, ThreadState::kSuspended});
-            LockGuard guard(thread.suspendMutex());
+            std::unique_lock lock(thread.suspendMutex());
             if (thread.state() == ThreadState::kSuspended) {
-                pthread_cond_signal(thread.suspendCondition());
+                thread.suspendCondition().notify_one();
             }
         }
     }

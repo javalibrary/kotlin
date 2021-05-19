@@ -34,15 +34,9 @@ public:
         stableRefThreadQueue_(StableRefRegistry::Instance()),
         state_(ThreadState::kRunnable),
         gc_(GlobalData::Instance().gc()),
-        objectFactoryThreadQueue_(GlobalData::Instance().objectFactory(), gc_) {
-        pthread_cond_init(&suspendCondition_, nullptr);
-        pthread_mutex_init(&suspendMutex_, nullptr);
-    }
+        objectFactoryThreadQueue_(GlobalData::Instance().objectFactory(), gc_) {}
 
-    ~ThreadData() {
-        pthread_mutex_destroy(&suspendMutex_);
-        pthread_cond_destroy(&suspendCondition_);
-    }
+    ~ThreadData() = default;
 
     pthread_t threadId() const noexcept { return threadId_; }
 
@@ -64,9 +58,9 @@ public:
 
     gc::GC::ThreadData& gc() noexcept { return gc_; }
 
-    pthread_cond_t* suspendCondition() { return &suspendCondition_; }
+    std::condition_variable& suspendCondition() { return suspendCondition_; }
 
-    pthread_mutex_t* suspendMutex() { return &suspendMutex_; }
+    std::mutex& suspendMutex() { return suspendMutex_; }
 
     void Publish() noexcept {
         // TODO: These use separate locks, which is inefficient.
@@ -91,8 +85,8 @@ private:
     gc::GC::ThreadData gc_;
     ObjectFactory<gc::GC>::ThreadQueue objectFactoryThreadQueue_;
     KStdVector<std::pair<ObjHeader**, ObjHeader*>> initializingSingletons_;
-    pthread_cond_t suspendCondition_;
-    pthread_mutex_t suspendMutex_;
+    std::condition_variable suspendCondition_;
+    std::mutex suspendMutex_;
 };
 
 } // namespace mm
