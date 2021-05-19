@@ -10,7 +10,6 @@ import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.UNDEFINED_OFFSET
 import org.jetbrains.kotlin.ir.declarations.*
 import org.jetbrains.kotlin.ir.expressions.*
-import org.jetbrains.kotlin.ir.expressions.impl.IrCallImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrConstImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrGetObjectValueImpl
 import org.jetbrains.kotlin.ir.interpreter.exceptions.InterpreterError
@@ -27,7 +26,7 @@ internal fun unfoldInstruction(element: IrElement?, environment: IrInterpreterEn
     when (element) {
         null -> return
         is IrSimpleFunction -> unfoldFunction(element, environment)
-        is IrConstructor -> unfoldConstructor(element, callStack)
+        is IrConstructor -> unfoldConstructor(element, environment)
         is IrCall -> unfoldCall(element, callStack)
         is IrConstructorCall -> unfoldConstructorCall(element, callStack)
         is IrEnumConstructorCall -> unfoldEnumConstructorCall(element, callStack)
@@ -77,10 +76,23 @@ private fun unfoldFunction(function: IrSimpleFunction, environment: IrInterprete
         ?: throw InterpreterError("Ir function must be with body")
 }
 
-private fun unfoldConstructor(constructor: IrConstructor, callStack: CallStack) {
-    // SimpleInstruction with function is added in constructor call
-    // It will serve as endpoint for all possible constructor calls, there we drop frame and return object
-    callStack.addInstruction(CompoundInstruction(constructor.body!!))
+private fun unfoldConstructor(constructor: IrConstructor, environment: IrInterpreterEnvironment) {
+    val callStack = environment.callStack
+    when (constructor.fqNameWhenAvailable?.asString()) {
+        "kotlin.Enum.<init>" -> {
+            val irClass = constructor.parentAsClass
+            val receiver = irClass.thisReceiver!!.symbol
+            val receiverState = callStack.getState(receiver)
+            irClass.declarations.filterIsInstance<IrProperty>().forEachIndexed { index, property ->
+                receiverState.setField(Variable(property.symbol, callStack.getState(constructor.valueParameters[index].symbol)))
+            }
+        }
+        else -> {
+            // SimpleInstruction with function is added in constructor call
+            // It will serve as endpoint for all possible constructor calls, there we drop frame and return object
+            callStack.addInstruction(CompoundInstruction(constructor.body!!))
+        }
+    }
 }
 
 private fun unfoldCall(call: IrCall, callStack: CallStack) {
@@ -331,14 +343,10 @@ private fun unfoldStringConcatenation(expression: IrStringConcatenation, environ
         when (val state = callStack.peekState()) {
             is Common -> {
                 callStack.popState()
-                val toStringFun = state.getToStringFunction()
-                val receiver = toStringFun.dispatchReceiverParameter!!
-                val toStringCall =
-                    IrCallImpl.fromSymbolOwner(UNDEFINED_OFFSET, UNDEFINED_OFFSET, environment.irBuiltIns.stringType, toStringFun.symbol)
-
+                val toStringCall = state.createToStringIrCall()
                 callStack.newSubFrame(toStringCall)
                 callStack.addInstruction(SimpleInstruction(toStringCall))
-                callStack.addVariable(Variable(receiver.symbol, state))
+                callStack.addVariable(Variable(toStringCall.symbol.owner.dispatchReceiverParameter!!.symbol, state))
             }
         }
     }
@@ -350,10 +358,8 @@ private fun unfoldStringConcatenation(expression: IrStringConcatenation, environ
 
 private fun unfoldComposite(element: IrComposite, callStack: CallStack) {
     when (element.origin) {
-        IrStatementOrigin.DESTRUCTURING_DECLARATION -> element.statements.reversed()
-            .forEach { callStack.addInstruction(CompoundInstruction(it)) }
-        null -> element.statements.reversed()
-            .forEach { callStack.addInstruction(CompoundInstruction(it)) } // is null for body of do while loop
+        IrStatementOrigin.DESTRUCTURING_DECLARATION, IrStatementOrigin.DO_WHILE_LOOP ->
+            element.statements.reversed().forEach { callStack.addInstruction(CompoundInstruction(it)) }
         else -> TODO("${element.origin} not implemented")
     }
 }
