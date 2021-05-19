@@ -33,7 +33,7 @@ open class AbstractIrInterpreterAfterFir2IrTest : AbstractKotlinCompilerWithTarg
         defaultDirectives {
             +JvmEnvironmentConfigurationDirectives.FULL_JDK
             +JvmEnvironmentConfigurationDirectives.NO_RUNTIME
-            +JvmEnvironmentConfigurationDirectives.ALLOW_KOTLIN_PACKAGE
+//            +JvmEnvironmentConfigurationDirectives.ALLOW_KOTLIN_PACKAGE
         }
 
         useConfigurators(
