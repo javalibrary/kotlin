@@ -8,36 +8,29 @@ package org.jetbrains.kotlin.idea.fir.low.level.api.api
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.psi.util.parentOfType
 import com.intellij.psi.util.parentsOfType
-import org.jetbrains.kotlin.descriptors.annotations.AnnotationUseSiteTarget
 import org.jetbrains.kotlin.fir.FirElement
-import org.jetbrains.kotlin.fir.builder.RawFirBuilder
-import org.jetbrains.kotlin.fir.declarations.FirFile
-import org.jetbrains.kotlin.fir.declarations.FirResolvePhase
+import org.jetbrains.kotlin.fir.declarations.*
 import org.jetbrains.kotlin.fir.expressions.FirAnnotationCall
-import org.jetbrains.kotlin.fir.extensions.predicateBasedProvider
 import org.jetbrains.kotlin.fir.realPsi
 import org.jetbrains.kotlin.fir.resolve.FirTowerDataContext
 import org.jetbrains.kotlin.fir.resolve.ScopeSession
 import org.jetbrains.kotlin.fir.resolve.asTowerDataElement
+import org.jetbrains.kotlin.fir.resolve.firProvider
 import org.jetbrains.kotlin.fir.resolve.transformers.FirTypeResolveTransformer
 import org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirTowerDataContextCollector
-import org.jetbrains.kotlin.fir.resolve.typeResolver
-import org.jetbrains.kotlin.fir.scopes.FirCompositeScope
 import org.jetbrains.kotlin.fir.scopes.createImportingScopes
-import org.jetbrains.kotlin.fir.toFirPsiSourceElement
-import org.jetbrains.kotlin.fir.types.ConeKotlinType
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
-import org.jetbrains.kotlin.fir.types.FirTypeRef
-import org.jetbrains.kotlin.fir.types.toFirResolvedTypeRef
 import org.jetbrains.kotlin.fir.visitors.FirVisitorVoid
 import org.jetbrains.kotlin.idea.caches.project.getModuleInfo
 import org.jetbrains.kotlin.idea.fir.low.level.api.FirModuleResolveStateDepended
 import org.jetbrains.kotlin.idea.fir.low.level.api.FirModuleResolveStateImpl
+import org.jetbrains.kotlin.idea.fir.low.level.api.api.DeclarationCopyBuilder.withBodyFrom
 import org.jetbrains.kotlin.idea.fir.low.level.api.element.builder.FileTowerProvider
 import org.jetbrains.kotlin.idea.fir.low.level.api.element.builder.FirTowerContextProvider
 import org.jetbrains.kotlin.idea.fir.low.level.api.element.builder.FirTowerDataContextAllElementsCollector
 import org.jetbrains.kotlin.idea.fir.low.level.api.file.structure.FirElementsRecorder
 import org.jetbrains.kotlin.idea.fir.low.level.api.file.structure.KtToFirMapping
+import org.jetbrains.kotlin.idea.fir.low.level.api.lazy.resolve.RawFirNonLocalDeclarationBuilder
 import org.jetbrains.kotlin.idea.fir.low.level.api.lazy.resolve.RawFirReplacement
 import org.jetbrains.kotlin.idea.fir.low.level.api.lazy.resolve.buildFileFirAnnotation
 import org.jetbrains.kotlin.idea.fir.low.level.api.lazy.resolve.buildFirUserTypeRef
@@ -45,6 +38,7 @@ import org.jetbrains.kotlin.idea.fir.low.level.api.providers.firIdeProvider
 import org.jetbrains.kotlin.idea.fir.low.level.api.sessions.FirIdeSourcesSession
 import org.jetbrains.kotlin.idea.fir.low.level.api.util.originalDeclaration
 import org.jetbrains.kotlin.idea.util.getElementTextInContext
+import org.jetbrains.kotlin.idea.util.ifTrue
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.containingClassOrObject
 
@@ -233,24 +227,65 @@ object LowLevelFirApiFacadeForResolveOnAir {
             }
         }
 
-        val copiedFirDeclaration = DeclarationCopyBuilder.createDeclarationCopy(
-            state = state,
-            nonLocalDeclaration = nonLocalDeclaration,
+        val originalDeclaration = nonLocalDeclaration.getOrBuildFir(state)
+        check(originalDeclaration is FirDeclaration) { "Invalid original declaration type ${originalDeclaration::class.simpleName}" }
+
+        val newDeclarationWithReplacement = RawFirNonLocalDeclarationBuilder.buildWithReplacement(
+            session = originalDeclaration.moduleData.session,
+            scopeProvider = originalDeclaration.moduleData.session.firIdeProvider.kotlinScopeProvider,
+            designation = originalDeclaration.collectDesignation(),
+            rootNonLocalDeclaration = nonLocalDeclaration,
             replacement = replacement,
         )
 
-        state.firLazyDeclarationResolver.lazyDesignatedResolveDeclaration(
-            firDeclarationToResolve = copiedFirDeclaration,
-            moduleFileCache = state.rootModuleSession.cache,
-            containerFirFile = originalFirFile,
-            provider = originalFirFile.moduleData.session.firIdeProvider,
-            toPhase = FirResolvePhase.BODY_RESOLVE,
-            checkPCE = true,
-            isOnAirResolve = isOnAirResolve,
-            towerDataContextCollector = collector,
-        )
+        val isInBodyReplacement = isInBodyReplacement(nonLocalDeclaration, replacement)
 
-        return copiedFirDeclaration
+        return state.rootModuleSession.cache.firFileLockProvider.withWriteLock(originalFirFile) {
+            val copiedFirDeclaration = isInBodyReplacement.ifTrue {
+                when (originalDeclaration) {
+                    is FirSimpleFunction ->
+                        originalDeclaration.withBodyFrom(newDeclarationWithReplacement as FirSimpleFunction)
+                    is FirProperty ->
+                        originalDeclaration.withBodyFrom(newDeclarationWithReplacement as FirProperty)
+                    is FirRegularClass ->
+                        originalDeclaration.withBodyFrom(newDeclarationWithReplacement as FirRegularClass)
+                    is FirTypeAlias -> originalDeclaration
+                    else -> error("Not supported type ${originalDeclaration::class.simpleName}")
+                }
+            } ?: newDeclarationWithReplacement
+
+            state.firLazyDeclarationResolver.lazyDesignatedResolveDeclaration(
+                firDeclarationToResolve = copiedFirDeclaration,
+                moduleFileCache = state.rootModuleSession.cache,
+                containerFirFile = originalFirFile,
+                provider = originalFirFile.moduleData.session.firIdeProvider,
+                toPhase = FirResolvePhase.BODY_RESOLVE,
+                checkPCE = true,
+                isOnAirResolve = isOnAirResolve,
+                towerDataContextCollector = collector,
+            )
+
+            copiedFirDeclaration
+        }
+
+    }
+
+    private fun isInBodyReplacement(ktDeclaration: KtDeclaration, replacement: RawFirReplacement): Boolean = when (ktDeclaration) {
+        is KtNamedFunction ->
+            ktDeclaration.bodyBlockExpression?.let { PsiTreeUtil.isAncestor(it, replacement.from, true) } ?: false
+        is KtProperty -> {
+            val insideGetterBody = ktDeclaration.getter?.bodyBlockExpression?.let {
+                PsiTreeUtil.isAncestor(it, replacement.from, true)
+            } ?: false
+
+            insideGetterBody || ktDeclaration.setter?.bodyBlockExpression?.let {
+                PsiTreeUtil.isAncestor(it, replacement.from, true)
+            } ?: false
+        }
+        is KtClassOrObject ->
+            ktDeclaration.body?.let { PsiTreeUtil.isAncestor(it, replacement.from, true) } ?: false
+        is KtTypeAlias -> false
+        else -> error("Not supported type ${ktDeclaration::class.simpleName}")
     }
 
     fun onAirResolveTypeInPlace(

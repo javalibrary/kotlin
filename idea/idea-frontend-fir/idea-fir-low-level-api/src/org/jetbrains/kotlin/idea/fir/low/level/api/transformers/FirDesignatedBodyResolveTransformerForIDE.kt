@@ -5,7 +5,6 @@
 
 package org.jetbrains.kotlin.idea.fir.low.level.api.transformers
 
-import org.jetbrains.kotlin.fir.FirElement
 import org.jetbrains.kotlin.fir.FirSession
 import org.jetbrains.kotlin.fir.declarations.*
 import org.jetbrains.kotlin.fir.resolve.ResolutionMode
@@ -14,8 +13,9 @@ import org.jetbrains.kotlin.fir.resolve.transformers.FirProviderInterceptor
 import org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.*
 import org.jetbrains.kotlin.idea.fir.low.level.api.api.FirDeclarationUntypedDesignationWithFile
 import org.jetbrains.kotlin.idea.fir.low.level.api.element.builder.FirIdeDesignatedBodyResolveTransformerForReturnTypeCalculator
-import org.jetbrains.kotlin.idea.fir.low.level.api.util.*
-import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensureTargetPhase
+import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensurePhase
+import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensurePhaseForClasses
+import org.jetbrains.kotlin.idea.fir.low.level.api.util.isTargetCallableDeclarationAndInPhase
 
 internal class FirDesignatedBodyResolveTransformerForIDE(
     private val designation: FirDeclarationUntypedDesignationWithFile,
@@ -42,21 +42,40 @@ internal class FirDesignatedBodyResolveTransformerForIDE(
     override fun transformDeclarationContent(declaration: FirDeclaration, data: ResolutionMode): FirDeclaration =
         ideDeclarationTransformer.transformDeclarationContent(this, declaration, data) {
             super.transformDeclarationContent(declaration, data)
-                .updateClassIfContentResolved(FirResolvePhase.BODY_RESOLVE)
         }
 
-    override fun needReplacePhase(firDeclaration: FirDeclaration): Boolean =
-        ideDeclarationTransformer.needReplacePhase
+    override fun needReplacePhase(firDeclaration: FirDeclaration): Boolean = true
 
     override fun transformDeclaration() {
-        if (designation.declaration.resolvePhase >= FirResolvePhase.BODY_RESOLVE) return
-        designation.ensureTargetPhase(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE)
+        if (designation.isTargetCallableDeclarationAndInPhase(FirResolvePhase.BODY_RESOLVE)) return
+
+        (designation.declaration as? FirCallableDeclaration<*>)?.ensurePhase(FirResolvePhase.CONTRACTS)
+        designation.ensurePhaseForClasses(FirResolvePhase.STATUS)
+
         designation.firFile.transform<FirFile, ResolutionMode>(this, ResolutionMode.ContextIndependent)
         ideDeclarationTransformer.ensureDesignationPassed()
         //TODO Figure out why the phase is not updated
         (designation.declaration as? FirTypeAlias)?.replaceResolvePhase(FirResolvePhase.BODY_RESOLVE)
-        designation.ensureTargetPhase(FirResolvePhase.BODY_RESOLVE)
-        designation.checkDesignationsConsistency(includeNonClassTarget = true)
+        designation.declaration.ensureResolved()
     }
+
+    private fun FirDeclaration.ensureResolved() {
+        when (this) {
+            is FirSimpleFunction -> ensurePhase(FirResolvePhase.BODY_RESOLVE)
+            is FirConstructor -> ensurePhase(FirResolvePhase.BODY_RESOLVE)
+            is FirProperty -> {
+                ensurePhase(FirResolvePhase.BODY_RESOLVE)
+                getter?.ensurePhase(FirResolvePhase.BODY_RESOLVE)
+                setter?.ensurePhase(FirResolvePhase.BODY_RESOLVE)
+            }
+            is FirClass<*> -> declarations.forEach { it.ensureResolved() }
+            is FirTypeAlias -> ensurePhase(FirResolvePhase.BODY_RESOLVE)
+            is FirEnumEntry -> Unit
+            is FirField -> ensurePhase(FirResolvePhase.BODY_RESOLVE)
+            is FirAnonymousInitializer -> ensurePhase(FirResolvePhase.BODY_RESOLVE)
+            else -> error { "Unexpected type: ${this::class.simpleName}" }
+        }
+    }
+
 }
 

@@ -16,9 +16,9 @@ import org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.createReturnTy
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
 import org.jetbrains.kotlin.idea.fir.low.level.api.api.FirDeclarationUntypedDesignationWithFile
 import org.jetbrains.kotlin.idea.fir.low.level.api.element.builder.FirIdeDesignatedBodyResolveTransformerForReturnTypeCalculator
-import org.jetbrains.kotlin.idea.fir.low.level.api.util.checkDesignationsConsistency
 import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensurePhase
-import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensureTargetPhase
+import org.jetbrains.kotlin.idea.fir.low.level.api.util.ensurePhaseForClasses
+import org.jetbrains.kotlin.idea.fir.low.level.api.util.isTargetCallableDeclarationAndInPhase
 
 internal class FirDesignatedImplicitTypesTransformerForIDE(
     private val designation: FirDeclarationUntypedDesignationWithFile,
@@ -45,39 +45,85 @@ internal class FirDesignatedImplicitTypesTransformerForIDE(
     override fun transformDeclarationContent(declaration: FirDeclaration, data: ResolutionMode): FirDeclaration =
         ideDeclarationTransformer.transformDeclarationContent(this, declaration, data) {
             super.transformDeclarationContent(declaration, data)
-                .updateClassIfContentResolved(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE)
         }
 
-    override fun needReplacePhase(firDeclaration: FirDeclaration): Boolean = ideDeclarationTransformer.needReplacePhase
+    override fun needReplacePhase(firDeclaration: FirDeclaration): Boolean = true
+
+//    private fun FirDeclaration.updatePhaseIfNeeded() {
+//        require(resolvePhase >= FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE || resolvePhase == FirResolvePhase.CONTRACTS)
+//        if (ideDeclarationTransformer.needReplacePhase && resolvePhase < FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE) {
+//            replaceResolvePhase(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE)
+//        }
+//    }
+//
+//    override fun transformAnonymousInitializer(anonymousInitializer: FirAnonymousInitializer, data: ResolutionMode): FirDeclaration {
+//        return super.transformAnonymousInitializer(anonymousInitializer, data).also {
+//            it.updatePhaseIfNeeded()
+//        }
+//    }
+//
+//    override fun transformProperty(property: FirProperty, data: ResolutionMode): FirProperty {
+//        return super.transformProperty(property, data).also {
+//            if (it.returnTypeRef is FirResolvedTypeRef) it.updatePhaseIfNeeded()
+//        }
+//    }
+//
+//    override fun transformSimpleFunction(simpleFunction: FirSimpleFunction, data: ResolutionMode): FirSimpleFunction {
+//        return super.transformSimpleFunction(simpleFunction, data).also {
+//            if (it.returnTypeRef is FirResolvedTypeRef) it.updatePhaseIfNeeded()
+//        }
+//    }
+//
+//    override fun transformField(field: FirField, data: ResolutionMode): FirDeclaration {
+//        return super.transformField(field, data).also {
+//            if (field.returnTypeRef is FirResolvedTypeRef) it.updatePhaseIfNeeded()
+//        }
+//    }
+//
+//    override fun transformConstructor(constructor: FirConstructor, data: ResolutionMode): FirDeclaration {
+//        return super.transformConstructor(constructor, data).also {
+//            it.updatePhaseIfNeeded()
+//        }
+//    }
+//
+//    override fun transformTypeAlias(typeAlias: FirTypeAlias, data: ResolutionMode): FirDeclaration {
+//        return super.transformTypeAlias(typeAlias, data).also {
+//            it.updatePhaseIfNeeded()
+//        }
+//    }
 
     override fun transformDeclaration() {
-        if (designation.declaration.resolvePhase >= FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE) return
-        designation.ensureTargetPhase(FirResolvePhase.CONTRACTS)
-
-        when (val declaration = designation.declaration) {
-            is FirCallableDeclaration<*> -> {
-                //We don't need resolve callable declaration if it is already resolved (for ex. with TYPES)
-                if (declaration.returnTypeRef is FirResolvedTypeRef) {
-                    declaration.replaceResolvePhase(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE)
-                    return
-                }
-            }
-            is FirTypeAlias -> {
-                //Nothing to do with type alias to this phase
-                declaration.replaceResolvePhase(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE)
-                return
-            }
+        if (designation.isTargetCallableDeclarationAndInPhase(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE)) return
+        val callableDeclaration = designation.declaration as? FirCallableDeclaration<*>
+        if (callableDeclaration != null) {
+            if (callableDeclaration.returnTypeRef is FirResolvedTypeRef) return
+            callableDeclaration.ensurePhase(FirResolvePhase.CONTRACTS)
         }
+        designation.ensurePhaseForClasses(FirResolvePhase.STATUS)
 
         designation.firFile.transform<FirFile, ResolutionMode>(this, ResolutionMode.ContextIndependent)
         ideDeclarationTransformer.ensureDesignationPassed()
 
-        val callableDeclaration = designation.declaration as? FirCallableDeclaration<*>
-        check(callableDeclaration == null || callableDeclaration.returnTypeRef is FirResolvedTypeRef) {
-            "Callable declaration seems to be unresolved after ${FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE} phase"
-        }
+        designation.declaration.ensureResolved()
+    }
 
-        designation.ensureTargetPhase(FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE)
-        designation.checkDesignationsConsistency(includeNonClassTarget = true)
+    private fun FirDeclaration.ensureResolved() {
+        when (this) {
+            is FirSimpleFunction -> {
+                check(returnTypeRef is FirResolvedTypeRef)
+            }
+            is FirConstructor -> Unit
+            is FirProperty -> {
+                check(returnTypeRef is FirResolvedTypeRef)
+//                check(getter?.returnTypeRef?.let { it is FirResolvedTypeRef } ?: true)
+//                check(setter?.returnTypeRef?.let { it is FirResolvedTypeRef } ?: true)
+            }
+            is FirClass<*> -> declarations.forEach { it.ensureResolved() }
+            is FirTypeAlias -> Unit
+            is FirEnumEntry -> Unit
+            is FirField -> check(returnTypeRef is FirResolvedTypeRef)
+            is FirAnonymousInitializer -> Unit
+            else -> error { "Unexpected type: ${this::class.simpleName}" }
+        }
     }
 }

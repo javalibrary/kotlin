@@ -6,41 +6,35 @@
 package org.jetbrains.kotlin.idea.fir.low.level.api.util
 
 import org.jetbrains.kotlin.fir.declarations.*
+import org.jetbrains.kotlin.fir.resolve.transformers.ensureResolved
+import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
 import org.jetbrains.kotlin.idea.fir.low.level.api.api.FirDeclarationUntypedDesignation
 
-internal fun FirDeclarationUntypedDesignation.ensurePathPhase(firResolvePhase: FirResolvePhase) {
-    toSequence(includeTarget = false).forEach { firDeclaration ->
-        check(firDeclaration.resolvePhase >= firResolvePhase) {
-            "Designation element phase required to be $firResolvePhase but element resolved to ${firDeclaration.resolvePhase}"
+internal fun FirDeclaration.ensurePhase(firResolvePhase: FirResolvePhase) =
+    check(resolvePhase >= firResolvePhase) {
+        "Element phase required to be $firResolvePhase but element resolved to $resolvePhase"
+    }
+
+internal fun FirDeclarationUntypedDesignation.ensurePathPhase(firResolvePhase: FirResolvePhase) =
+    path.forEach { it.ensurePhase(firResolvePhase) }
+
+//internal fun FirDeclarationUntypedDesignation.ensureTargetPhase(firResolvePhase: FirResolvePhase) =
+//    declaration.ensurePhase(firResolvePhase)
+
+internal fun FirDeclarationUntypedDesignation.ensureDesignation(firResolvePhase: FirResolvePhase) {
+    ensurePathPhase(firResolvePhase)
+    declaration.ensurePhase(firResolvePhase)
+}
+internal fun FirDeclarationUntypedDesignation.ensurePhaseForClasses(firResolvePhase: FirResolvePhase) {
+    ensurePathPhase(firResolvePhase)
+    if (declaration is FirClassLikeDeclaration<*>) {
+        check(declaration.resolvePhase >= firResolvePhase) {
+            "Expected $firResolvePhase but found ${declaration.resolvePhase}"
         }
     }
 }
 
-internal fun FirDeclarationUntypedDesignation.ensureTargetPhase(firResolvePhase: FirResolvePhase) =
-    check(declaration.resolvePhase >= firResolvePhase) { "Expected $firResolvePhase but found ${declaration.resolvePhase}" }
-
-internal fun FirDeclarationUntypedDesignation.ensurePhase(firResolvePhase: FirResolvePhase) {
-    toSequence(includeTarget = true).forEach {
-        check(it.resolvePhase >= firResolvePhase) { "Expected $firResolvePhase but found ${it.resolvePhase}" }
-    }
-}
-
-internal fun FirDeclarationUntypedDesignation.ensureTargetPhaseIfClass(firResolvePhase: FirResolvePhase) = when (declaration) {
-    is FirProperty, is FirSimpleFunction, is FirConstructor -> Unit
-    is FirClass<*>, is FirTypeAlias -> ensureTargetPhase(firResolvePhase)
-    else -> error("Unexpected target")
-}
+internal fun FirDeclarationUntypedDesignation.isTargetCallableDeclarationAndInPhase(firResolvePhase: FirResolvePhase): Boolean =
+    (declaration as? FirCallableDeclaration<*>)?.let { it.resolvePhase >= firResolvePhase } ?: false
 
 internal fun FirDeclarationUntypedDesignation.targetContainingDeclaration(): FirDeclaration? = path.lastOrNull()
-
-internal fun FirDeclarationUntypedDesignation.checkDesignationsConsistency(includeNonClassTarget: Boolean) {
-    val includeTarget = includeNonClassTarget && declaration !is FirClass<*>
-    for (declaration in toSequence(includeTarget = includeTarget)) {
-        if (declaration is FirClass<*>) {
-            val minimumPhaseDeclaration = declaration.declarations.minByOrNull { it.resolvePhase } ?: continue
-            check(declaration.resolvePhase <= minimumPhaseDeclaration.resolvePhase) {
-                "Parent phase ${declaration.resolvePhase} should not be greater than minimum children phase ${minimumPhaseDeclaration.resolvePhase}"
-            }
-        }
-    }
-}

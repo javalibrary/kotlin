@@ -98,17 +98,24 @@ open class FirApplySupertypesTransformer(
         return element
     }
 
+    protected open fun needReplacePhase(firDeclaration: FirDeclaration) = true
+
+    protected open fun transformDeclarationContent(declaration: FirDeclaration, data: Any?): FirDeclaration {
+        return declaration.transformChildren(this, null) as FirDeclaration
+    }
+
     override fun transformFile(file: FirFile, data: Any?): FirDeclaration {
-        if (needToApplyResolvePhase) {
+        if (needReplacePhase(file)) {
             file.replaceResolvePhase(FirResolvePhase.SUPER_TYPES)
         }
-        return (file.transformChildren(this, null) as FirFile)
+
+        return transformDeclarationContent(file, null) as FirFile
     }
 
     override fun transformRegularClass(regularClass: FirRegularClass, data: Any?): FirStatement {
         applyResolvedSupertypesToClass(regularClass)
 
-        return (regularClass.transformChildren(this, null) as FirRegularClass)
+        return transformDeclarationContent(regularClass, null) as FirRegularClass
     }
 
     private fun applyResolvedSupertypesToClass(firClass: FirClass<*>) {
@@ -118,12 +125,10 @@ open class FirApplySupertypesTransformer(
             // TODO: Replace with an immutable version or transformer
             firClass.replaceSuperTypeRefs(supertypeRefs)
         }
-        if (needToApplyResolvePhase) {
+        if (needReplacePhase(firClass)) {
             firClass.replaceResolvePhase(FirResolvePhase.SUPER_TYPES)
         }
     }
-
-    open val needToApplyResolvePhase get() = true
 
     override fun transformAnonymousObject(anonymousObject: FirAnonymousObject, data: Any?): FirStatement {
         applyResolvedSupertypesToClass(anonymousObject)
@@ -149,7 +154,7 @@ open class FirApplySupertypesTransformer(
 
         // TODO: Replace with an immutable version or transformer
         typeAlias.replaceExpandedTypeRef(supertypeRefs[0])
-        if (needToApplyResolvePhase) {
+        if (needReplacePhase(typeAlias)) {
             typeAlias.replaceResolvePhase(FirResolvePhase.SUPER_TYPES)
         }
         return typeAlias
@@ -293,14 +298,18 @@ open class FirSupertypeResolverVisitor(
         return resolvedTypesRefs
     }
 
+    open fun visitDeclarationContent(declaration: FirDeclaration, data: Any?) {
+        declaration.acceptChildren(this, null)
+    }
+
     override fun visitRegularClass(regularClass: FirRegularClass, data: Any?) {
         resolveSpecificClassLikeSupertypes(regularClass, regularClass.superTypeRefs)
-        regularClass.acceptChildren(this, null)
+        visitDeclarationContent(regularClass, null)
     }
 
     override fun visitAnonymousObject(anonymousObject: FirAnonymousObject, data: Any?) {
         resolveSpecificClassLikeSupertypes(anonymousObject, anonymousObject.superTypeRefs)
-        anonymousObject.acceptChildren(this, null)
+        visitDeclarationContent(anonymousObject, null)
     }
 
     fun resolveSpecificClassLikeSupertypes(
@@ -383,7 +392,7 @@ open class FirSupertypeResolverVisitor(
     }
 
     override fun visitFile(file: FirFile, data: Any?) {
-        file.acceptChildren(this, null)
+        visitDeclarationContent(file, null)
     }
 }
 
