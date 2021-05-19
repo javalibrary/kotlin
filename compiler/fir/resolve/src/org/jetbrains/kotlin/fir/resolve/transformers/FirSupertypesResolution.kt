@@ -99,8 +99,9 @@ open class FirApplySupertypesTransformer(
     }
 
     override fun transformFile(file: FirFile, data: Any?): FirDeclaration {
-        file.replaceResolvePhase(FirResolvePhase.SUPER_TYPES)
-
+        if (needToApplyResolvePhase) {
+            file.replaceResolvePhase(FirResolvePhase.SUPER_TYPES)
+        }
         return (file.transformChildren(this, null) as FirFile)
     }
 
@@ -117,8 +118,12 @@ open class FirApplySupertypesTransformer(
             // TODO: Replace with an immutable version or transformer
             firClass.replaceSuperTypeRefs(supertypeRefs)
         }
-        firClass.replaceResolvePhase(FirResolvePhase.SUPER_TYPES)
+        if (needToApplyResolvePhase) {
+            firClass.replaceResolvePhase(FirResolvePhase.SUPER_TYPES)
+        }
     }
+
+    open val needToApplyResolvePhase get() = true
 
     override fun transformAnonymousObject(anonymousObject: FirAnonymousObject, data: Any?): FirStatement {
         applyResolvedSupertypesToClass(anonymousObject)
@@ -144,8 +149,9 @@ open class FirApplySupertypesTransformer(
 
         // TODO: Replace with an immutable version or transformer
         typeAlias.replaceExpandedTypeRef(supertypeRefs[0])
-        typeAlias.replaceResolvePhase(FirResolvePhase.SUPER_TYPES)
-
+        if (needToApplyResolvePhase) {
+            typeAlias.replaceResolvePhase(FirResolvePhase.SUPER_TYPES)
+        }
         return typeAlias
     }
 }
