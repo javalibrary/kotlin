@@ -21,11 +21,11 @@ bool isRunnableOrNative(kotlin::mm::ThreadData& thread) {
     return state == kotlin::ThreadState::kRunnable || state == kotlin::ThreadState::kNative;
 }
 
-template<bool(*Check)(kotlin::mm::ThreadData&)>
-bool allThreads() {
+template<typename F>
+bool allThreads(F predicate) {
     kotlin::mm::ThreadRegistry::Iterable threads = kotlin::mm::ThreadRegistry::Instance().Iter();
     for (auto& thread : threads) {
-        if (!Check(thread)) {
+        if (!predicate(thread)) {
             return false;
         }
     }
@@ -60,13 +60,13 @@ void kotlin::mm::SuspendThreads() {
     gSuspensionRequested = true;
 
     // Spin wating for threads to suspend. Ignore Native threads.
-    while(!allThreads<isSuspendedOrNative>()) {
+    while(!allThreads(isSuspendedOrNative)) {
         yield();
     }
 }
 
 void kotlin::mm::ResumeThreads() {
-    RuntimeAssert(allThreads<isSuspendedOrNative>(), "Some threads are in RUNNABLE state");
+    RuntimeAssert(allThreads(isSuspendedOrNative), "Some threads are in RUNNABLE state");
 
     gSuspensionRequested = false;
     {
@@ -82,7 +82,7 @@ void kotlin::mm::ResumeThreads() {
     // Wait for threads to run. Ignore Native threads.
     // TODO: This (+ GC lock) should allow us to avoid the situation when a resumed thread triggers the GC again while we still resuming other threads.
     //       Try to get rid for this?
-    while(!allThreads<isRunnableOrNative>()) {
+    while(!allThreads(isRunnableOrNative)) {
         yield();
     }
 }
