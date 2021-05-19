@@ -136,14 +136,6 @@ fun generateJUnit3CompilerTests(args: Array<String>) {
                 model("ir/irJsText", pattern = "^(.+)\\.kt(s)?\$")
             }
 
-            testClass<AbstractJsInterpreterTestCase> {
-                model("ir/interpreter", pattern = "^(.+)\\.kt(s)?\$", excludeDirs = listOf("jvm"))
-            }
-
-            testClass<AbstractJvmInterpreterTestCase> {
-                model("ir/interpreter", pattern = "^(.+)\\.kt(s)?\$")
-            }
-
             testClass<AbstractIrCfgTestCase> {
                 model("ir/irCfg")
             }
