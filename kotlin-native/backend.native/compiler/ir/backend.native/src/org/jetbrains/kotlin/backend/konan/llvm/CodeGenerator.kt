@@ -95,6 +95,19 @@ internal sealed class ExceptionHandler {
     abstract class Local : ExceptionHandler() {
         abstract val unwind: LLVMBasicBlockRef
     }
+
+    open fun genThrow(
+            functionGenerationContext: FunctionGenerationContext,
+            kotlinException: LLVMValueRef
+    ): Unit = with(functionGenerationContext) {
+        call(
+                context.llvm.throwExceptionFunction,
+                listOf(kotlinException),
+                Lifetime.IRRELEVANT,
+                this@ExceptionHandler
+        )
+        unreachable()
+    }
 }
 
 internal enum class ThreadState {
@@ -777,7 +790,11 @@ internal class FunctionGenerationContext(val function: LLVMValueRef,
         return LLVMBuildExtractElement(builder, vector, index, name)!!
     }
 
-    fun filteringExceptionHandler(codeContext: CodeContext, foreignExceptionMode: ForeignExceptionMode.Mode, switchThreadState: Boolean): ExceptionHandler {
+    fun filteringExceptionHandler(
+            outerHandler: ExceptionHandler,
+            foreignExceptionMode: ForeignExceptionMode.Mode,
+            switchThreadState: Boolean
+    ): ExceptionHandler {
         val lpBlock = basicBlockInFunction("filteringExceptionHandler", position()?.start)
 
         val wrapExceptionMode = context.config.target.family.isAppleFamily &&
@@ -817,8 +834,8 @@ internal class FunctionGenerationContext(val function: LLVMValueRef,
                     condBr(isObjCException, forwardNativeExceptionBlock, fatalForeignExceptionBlock)
 
                     appendingTo(forwardNativeExceptionBlock) {
-                        val exception = createForeignException(landingpad, codeContext.exceptionHandler)
-                        codeContext.genThrow(exception)
+                        val exception = createForeignException(landingpad, outerHandler)
+                        outerHandler.genThrow(this, exception)
                     }
                 }
             } else {
@@ -827,7 +844,7 @@ internal class FunctionGenerationContext(val function: LLVMValueRef,
 
             appendingTo(forwardKotlinExceptionBlock) {
                 // Rethrow Kotlin exception to real handler.
-                codeContext.genThrow(extractKotlinException(landingpad))
+                outerHandler.genThrow(this, extractKotlinException(landingpad))
             }
 
             appendingTo(fatalForeignExceptionBlock) {
