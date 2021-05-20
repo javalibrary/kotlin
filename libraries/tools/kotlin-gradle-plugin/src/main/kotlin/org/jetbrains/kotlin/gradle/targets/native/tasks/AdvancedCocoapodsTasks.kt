@@ -484,6 +484,7 @@ open class PodBuildTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.ABSOLUTE)
     @get:InputFile
     lateinit var buildSettingsFile: Provider<File>
+        internal set
 
     @get:Nested
     internal lateinit var pod: Provider<CocoapodsDependency>

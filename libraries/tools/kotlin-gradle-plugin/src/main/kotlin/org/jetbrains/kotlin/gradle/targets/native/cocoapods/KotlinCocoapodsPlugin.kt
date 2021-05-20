@@ -69,13 +69,16 @@ private val Family.toPodGenTaskName: String
         name
     )
 
-fun String.toSetupBuildTaskName(pod: CocoapodsDependency): String = lowerCamelCaseName(
+private fun String.toSetupBuildTaskName(pod: CocoapodsDependency): String = lowerCamelCaseName(
     KotlinCocoapodsPlugin.POD_SETUP_BUILD_TASK_NAME,
     pod.name.asValidTaskName(),
     this
 )
 
-fun String.toBuildDependenciesTaskName(pod: CocoapodsDependency): String = lowerCamelCaseName(
+fun CocoapodsDependency.toSetupBuildTaskName(kotlinNativeTarget: KotlinNativeTarget) =
+    kotlinNativeTarget.toValidSDK.toSetupBuildTaskName(this)
+
+private fun String.toBuildDependenciesTaskName(pod: CocoapodsDependency): String = lowerCamelCaseName(
     KotlinCocoapodsPlugin.POD_BUILD_TASK_NAME,
     pod.name.asValidTaskName(),
     this
@@ -87,22 +90,23 @@ private val CocoapodsDependency.toPodDownloadTaskName: String
         name.asValidTaskName()
     )
 
+
+private val KotlinNativeTarget.toValidSDK: String
+    get() = when (konanTarget) {
+        IOS_X64 -> "iphonesimulator"
+        IOS_ARM32, IOS_ARM64 -> "iphoneos"
+        WATCHOS_X86, WATCHOS_X64 -> "watchsimulator"
+        WATCHOS_ARM32, WATCHOS_ARM64 -> "watchos"
+        TVOS_X64 -> "appletvsimulator"
+        TVOS_ARM64 -> "appletvos"
+        MACOS_X64 -> "macosx"
+        else -> throw IllegalArgumentException("Bad target ${konanTarget.name}.")
+    }
+
 open class KotlinCocoapodsPlugin : Plugin<Project> {
     fun KotlinMultiplatformExtension.supportedTargets() = targets
         .withType(KotlinNativeTarget::class.java)
         .matching { it.konanTarget.family.isAppleFamily }
-
-    val KotlinNativeTarget.toValidSDK: String
-        get() = when (konanTarget) {
-            IOS_X64 -> "iphonesimulator"
-            IOS_ARM32, IOS_ARM64 -> "iphoneos"
-            WATCHOS_X86, WATCHOS_X64 -> "watchsimulator"
-            WATCHOS_ARM32, WATCHOS_ARM64 -> "watchos"
-            TVOS_X64 -> "appletvsimulator"
-            TVOS_ARM64 -> "appletvos"
-            MACOS_X64 -> "macosx"
-            else -> throw IllegalArgumentException("Bad target ${konanTarget.name}.")
-        }
 
     /**
      * Splits a string using a whitespace characters as delimiters.
