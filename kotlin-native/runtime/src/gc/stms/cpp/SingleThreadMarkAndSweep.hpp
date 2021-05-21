@@ -14,7 +14,8 @@
 namespace kotlin {
 namespace gc {
 
-// Stop-the-world Mark-and-Sweep for a single mutator
+// Stop-the-world Mark-and-Sweep that runs on mutator threads. Can support targets that do not have threads.
+// TODO: Rename it away from SingleThreadMarkAndSweep, but keep it STMS.
 class SingleThreadMarkAndSweep : private Pinned {
 public:
     class ObjectData {
@@ -49,6 +50,9 @@ public:
         void OnOOM(size_t size) noexcept;
 
     private:
+        void SafePointRegular(size_t weight) noexcept;
+        bool SuspendThreadIfRequested() noexcept;
+
         SingleThreadMarkAndSweep& gc_;
         size_t allocatedBytes_ = 0;
         size_t safePointsCounter_ = 0;
@@ -64,9 +68,7 @@ public:
     size_t GetAllocationThresholdBytes() noexcept { return allocationThresholdBytes_; }
 
 private:
-    void PerformFullGC() noexcept;
-
-    bool running_ = false;
+    bool PerformFullGC() noexcept;
 
     size_t threshold_ = 1000;
     size_t allocationThresholdBytes_ = 10000;
