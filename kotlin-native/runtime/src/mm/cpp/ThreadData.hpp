@@ -59,8 +59,6 @@ public:
 
     gc::GC::ThreadData& gc() noexcept { return gc_; }
 
-    ThreadSuspensionData& suspensionData() noexcept { return suspensionData_; }
-
     void Publish() noexcept {
         // TODO: These use separate locks, which is inefficient.
         globalsThreadQueue_.Publish();

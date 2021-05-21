@@ -23,14 +23,8 @@ public:
 
     ThreadState setState(ThreadState state) noexcept { return state_.exchange(state); }
 
-    std::condition_variable& conditionVar() noexcept { return conditionVar_; }
-
-    std::mutex& mutex() noexcept { return mutex_; }
-
 private:
     std::atomic<ThreadState> state_;
-    std::condition_variable conditionVar_;
-    std::mutex mutex_;
 };
 
 } // namespace mm
