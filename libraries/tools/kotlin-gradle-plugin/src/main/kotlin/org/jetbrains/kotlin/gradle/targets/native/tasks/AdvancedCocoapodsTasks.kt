@@ -451,7 +451,7 @@ open class PodSetupBuildTask : DefaultTask() {
     }
 
     @get:Internal
-    lateinit var podsXcodeProjDir: Provider<File>
+    internal lateinit var podsXcodeProjDir: Provider<File>
 
     @TaskAction
     fun setupBuild() {
