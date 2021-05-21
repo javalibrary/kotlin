@@ -29371,9 +29371,14 @@ public class LightAnalysisModeTestGenerated extends AbstractLightAnalysisModeTes
                 runTest("compiler/testData/codegen/box/reflection/typeOf/classes.kt");
             }
 
-            @TestMetadata("flexibleType.kt")
-            public void testFlexibleType() throws Exception {
-                runTest("compiler/testData/codegen/box/reflection/typeOf/flexibleType.kt");
+            @TestMetadata("flexibleTypes_1_5.kt")
+            public void testFlexibleTypes_1_5() throws Exception {
+                runTest("compiler/testData/codegen/box/reflection/typeOf/flexibleTypes_1_5.kt");
+            }
+
+            @TestMetadata("flexibleTypes_1_6.kt")
+            public void testFlexibleTypes_1_6() throws Exception {
+                runTest("compiler/testData/codegen/box/reflection/typeOf/flexibleTypes_1_6.kt");
             }
 
             @TestMetadata("inlineClasses.kt")
@@ -29424,6 +29429,16 @@ public class LightAnalysisModeTestGenerated extends AbstractLightAnalysisModeTes
                 @TestMetadata("classes.kt")
                 public void testClasses() throws Exception {
                     runTest("compiler/testData/codegen/box/reflection/typeOf/noReflect/classes.kt");
+                }
+
+                @TestMetadata("flexibleTypes_1_5.kt")
+                public void testFlexibleTypes_1_5() throws Exception {
+                    runTest("compiler/testData/codegen/box/reflection/typeOf/noReflect/flexibleTypes_1_5.kt");
+                }
+
+                @TestMetadata("flexibleTypes_1_6.kt")
+                public void testFlexibleTypes_1_6() throws Exception {
+                    runTest("compiler/testData/codegen/box/reflection/typeOf/noReflect/flexibleTypes_1_6.kt");
                 }
 
                 @TestMetadata("inlineClasses.kt")
