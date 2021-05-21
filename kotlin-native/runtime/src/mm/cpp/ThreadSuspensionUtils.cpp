@@ -11,9 +11,10 @@
 
 namespace {
 
+// TODO: Accept a ThreadSuspensionData?
 bool isSuspendedOrNative(kotlin::mm::ThreadData& thread) {
-    auto state = thread.state();
-    return state == kotlin::ThreadState::kSuspended || state == kotlin::ThreadState::kNative;
+    auto& suspensionData = thread.suspensionData();
+    return suspensionData.suspended() || suspensionData.state() == kotlin::ThreadState::kNative;
 }
 
 bool isRunnableOrNative(kotlin::mm::ThreadData& thread) {
@@ -42,19 +43,20 @@ std::condition_variable gSuspendsionCondVar;
 
 } // namespace
 
-bool kotlin::mm::IsThreadSuspensionRequested() {
-    // TODO: Consider using a more relaxed memory order.
-    return gSuspensionRequested.load();
-}
-
-void kotlin::mm::SuspendThreadIfRequested(ThreadData* threadData) {
+void kotlin::mm::ThreadSuspensionData::suspendIfRequested() noexcept {
     if (IsThreadSuspensionRequested()) {
         std::unique_lock lock(gSuspensionMutex);
         if (IsThreadSuspensionRequested()) {
-            ThreadStateGuard stateGuard(ThreadState::kSuspended);
+            suspended_ = true;
             gSuspendsionCondVar.wait(lock, []() { return !IsThreadSuspensionRequested(); });
+            suspended_ = false;
         }
     }
+}
+
+bool kotlin::mm::IsThreadSuspensionRequested() {
+    // TODO: Consider using a more relaxed memory order.
+    return gSuspensionRequested.load();
 }
 
 void kotlin::mm::SuspendThreads() {
@@ -67,8 +69,6 @@ void kotlin::mm::SuspendThreads() {
 }
 
 void kotlin::mm::ResumeThreads() {
-    RuntimeAssert(allThreads(isSuspendedOrNative), "Some threads are in RUNNABLE state");
-
     // From the std::condition_variable docs:
     // Even if the shared variable is atomic, it must be modified under
     // the mutex in order to correctly publish the modification to the waiting thread.
@@ -77,7 +77,7 @@ void kotlin::mm::ResumeThreads() {
         std::unique_lock lock(gSuspensionMutex);
         gSuspensionRequested = false;
     }
-    gSuspendsionCondVar.notify_all(); // TODO: Shouldn't it be under the lock too?
+    gSuspendsionCondVar.notify_all();
 
     // Wait for threads to run. Ignore Native threads.
     // TODO: This loop (+ GC lock) allows us to avoid the situation when a resumed thread triggers the GC again while we still resuming other threads.

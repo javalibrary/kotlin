@@ -15,10 +15,10 @@
 #include "ObjectFactory.hpp"
 #include "ShadowStack.hpp"
 #include "StableRefRegistry.hpp"
-#include "ThreadSuspensionData.h"
 #include "ThreadLocalStorage.hpp"
 #include "Types.h"
 #include "Utils.hpp"
+#include "ThreadSuspensionUtils.hpp"
 
 struct ObjHeader;
 
@@ -58,6 +58,8 @@ public:
     KStdVector<std::pair<ObjHeader**, ObjHeader*>>& initializingSingletons() noexcept { return initializingSingletons_; }
 
     gc::GC::ThreadData& gc() noexcept { return gc_; }
+
+    ThreadSuspensionData& suspensionData() { return suspensionData_; }
 
     void Publish() noexcept {
         // TODO: These use separate locks, which is inefficient.

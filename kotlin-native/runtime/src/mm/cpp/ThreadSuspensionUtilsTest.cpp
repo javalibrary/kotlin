@@ -36,12 +36,17 @@ KStdVector<mm::ThreadData*> collectThreadData() {
     return result;
 }
 
-KStdVector<ThreadState> collectThreadStates() {
-    KStdVector<ThreadState> result;
+template<typename T, typename F>
+KStdVector<T> collectFromThreadData(F extractFunction) {
+    KStdVector<T> result;
     auto threadData = collectThreadData();
-    std::transform(threadData.begin(), threadData.end(), std::back_inserter(result),
-                   [](mm::ThreadData* threadData) { return threadData->state(); });
+    std::transform(threadData.begin(), threadData.end(), std::back_inserter(result), extractFunction);
     return result;
+}
+
+KStdVector<bool> collectSuspended() {
+    return collectFromThreadData<bool>(
+            [](mm::ThreadData* threadData) { return threadData->suspensionData().suspended(); });
 }
 
 void reportProgress(size_t currentIteration, size_t totalIterations) {
@@ -64,7 +69,7 @@ TEST(ThreadSuspensionTest, SimpleStartStop) {
     for (size_t i = 0; i < kThreadCount; i++) {
         threads.emplace_back([&canStart, &shouldStop, &ready, i]() {
             ScopedMemoryInit init;
-            auto* threadData = init.memoryState()->GetThreadData();
+            auto& suspensionData = init.memoryState()->GetThreadData()->suspensionData();
             EXPECT_EQ(mm::IsThreadSuspensionRequested(), false);
 
             while(!shouldStop) {
@@ -74,9 +79,9 @@ TEST(ThreadSuspensionTest, SimpleStartStop) {
                 }
                 ready[i] = false;
 
-                EXPECT_EQ(threadData->state(), ThreadState::kRunnable);
-                mm::SuspendThreadIfRequested(threadData);
-                EXPECT_EQ(threadData->state(), ThreadState::kRunnable);
+                EXPECT_FALSE(suspensionData.suspended());
+                suspensionData.suspendIfRequested();
+                EXPECT_FALSE(suspensionData.suspended());
            }
         });
     }
@@ -90,13 +95,13 @@ TEST(ThreadSuspensionTest, SimpleStartStop) {
         canStart = true;
 
         mm::SuspendThreads();
-        auto threadStates = collectThreadStates();
-        EXPECT_THAT(threadStates, testing::Each(ThreadState::kSuspended));
+        auto suspended = collectSuspended();
+        EXPECT_THAT(suspended, testing::Each(true));
         EXPECT_EQ(mm::IsThreadSuspensionRequested(), true);
 
         mm::ResumeThreads();
-        threadStates = collectThreadStates();
-        EXPECT_THAT(threadStates, testing::Each(ThreadState::kRunnable));
+        suspended = collectSuspended();
+        EXPECT_THAT(suspended, testing::Each(false));
         EXPECT_EQ(mm::IsThreadSuspensionRequested(), false);
 
         // Sync for the next iteration.
@@ -149,13 +154,9 @@ TEST(ThreadSuspensionTest, SwitchStateToNative) {
         canStart = true;
 
         mm::SuspendThreads();
-        auto threadStates = collectThreadStates();
-        EXPECT_THAT(threadStates, testing::Each(testing::AnyOf(ThreadState::kSuspended, ThreadState::kNative)));
         EXPECT_EQ(mm::IsThreadSuspensionRequested(), true);
 
         mm::ResumeThreads();
-        threadStates = collectThreadStates();
-        EXPECT_THAT(threadStates, testing::Each(testing::AnyOf(ThreadState::kRunnable, ThreadState::kNative)));
         EXPECT_EQ(mm::IsThreadSuspensionRequested(), false);
 
         // Sync for the next iteration.

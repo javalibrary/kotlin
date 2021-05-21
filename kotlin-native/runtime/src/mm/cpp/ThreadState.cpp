@@ -13,8 +13,6 @@ const char* kotlin::ThreadStateName(ThreadState state) noexcept {
             return "RUNNABLE";
         case ThreadState::kNative:
             return "NATIVE";
-        case ThreadState::kSuspended:
-            return "SUSPENDED";
     }
 }
 

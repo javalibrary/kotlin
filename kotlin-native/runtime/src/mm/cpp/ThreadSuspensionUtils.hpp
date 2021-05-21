@@ -6,13 +6,35 @@
 #ifndef RUNTIME_MM_THREAD_SUSPENSION_UTILS_H
 #define RUNTIME_MM_THREAD_SUSPENSION_UTILS_H
 
-#include "ThreadData.hpp"
-
 namespace kotlin {
 namespace mm {
 
+class ThreadSuspensionData : private Pinned {
+public:
+    explicit ThreadSuspensionData(ThreadState initialState) noexcept : state_(initialState), suspended_(false) {}
+
+    ~ThreadSuspensionData() = default;
+
+    ThreadState state() noexcept { return state_; }
+
+    ThreadState setState(ThreadState newState) noexcept {
+        ThreadState oldState = state_.exchange(newState);
+        if (oldState == ThreadState::kNative && newState == ThreadState::kRunnable) {
+            suspendIfRequested();
+        }
+        return oldState;
+    }
+
+    bool suspended() noexcept { return suspended_; }
+
+    void suspendIfRequested() noexcept;
+
+private:
+    std::atomic<ThreadState> state_;
+    std::atomic<bool> suspended_;
+};
+
 bool IsThreadSuspensionRequested();
-void SuspendThreadIfRequested(ThreadData* threadData);
 
 /**
  * Suspends all threads registered in ThreadRegistry except threads that are in the Native state.

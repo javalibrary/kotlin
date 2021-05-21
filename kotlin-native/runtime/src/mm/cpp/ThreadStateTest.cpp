@@ -148,8 +148,6 @@ TEST(ThreadStateDeathTest, StateAsserts) {
                      "runtime assert: Unexpected thread state. Expected: NATIVE. Actual: RUNNABLE");
         EXPECT_DEATH(AssertThreadState(ThreadState::kNative),
                      "runtime assert: Unexpected thread state. Expected: NATIVE. Actual: RUNNABLE");
-        EXPECT_DEATH(AssertThreadState({ThreadState::kNative, ThreadState::kSuspended}),
-                     "runtime assert: Unexpected thread state. Expected one of: { NATIVE, SUSPENDED }. Actual: RUNNABLE");
     });
 }
 
@@ -171,28 +169,19 @@ TEST(ThreadStateDeathTest, IncorrectStateSwitchWithDifferentFunctions) {
 TEST(ThreadStateDeathTest, StateSwitchCorrectness) {
     mm::ThreadData threadData(pthread_self());
 
-    // Allowed state switches: runnable <-> native, runnable <-> suspended, native <-> suspended.
+    // Allowed state switches: runnable <-> native
     threadData.setState(ThreadState::kRunnable);
     ASSERT_EQ(threadData.state(), ThreadState::kRunnable);
     EXPECT_DEATH(SwitchThreadState(&threadData, ThreadState::kRunnable),
                  "runtime assert: Illegal thread state switch. Old state: RUNNABLE. New state: RUNNABLE");
     // Each EXPECT_NO_DEATH is executed in a fork process, so the global state of the test is not affected.
     EXPECT_NO_DEATH(SwitchThreadState(&threadData, ThreadState::kNative));
-    EXPECT_NO_DEATH(SwitchThreadState(&threadData, ThreadState::kSuspended));
 
     threadData.setState(ThreadState::kNative);
     ASSERT_EQ(threadData.state(), ThreadState::kNative);
     EXPECT_NO_DEATH(SwitchThreadState(&threadData, ThreadState::kRunnable));
     EXPECT_DEATH(SwitchThreadState(&threadData, ThreadState::kNative),
                  "runtime assert: Illegal thread state switch. Old state: NATIVE. New state: NATIVE");
-    EXPECT_NO_DEATH(SwitchThreadState(&threadData, ThreadState::kSuspended));
-
-    threadData.setState(ThreadState::kSuspended);
-    ASSERT_EQ(threadData.state(), ThreadState::kSuspended);
-    EXPECT_NO_DEATH(SwitchThreadState(&threadData, ThreadState::kRunnable));
-    EXPECT_NO_DEATH(SwitchThreadState(&threadData, ThreadState::kNative));
-    EXPECT_DEATH(SwitchThreadState(&threadData, ThreadState::kSuspended),
-                 "runtime assert: Illegal thread state switch. Old state: SUSPENDED. New state: SUSPENDED");
 }
 
 TEST(ThreadStateDeathTest, ReentrantStateSwitch) {

@@ -6,6 +6,8 @@
 #ifndef RUNTIME_MM_THREAD_STATE_H
 #define RUNTIME_MM_THREAD_STATE_H
 
+#include <ostream>
+
 #include <Common.h>
 #include <Utils.hpp>
 
@@ -32,16 +34,11 @@ inline std::ostream& operator<<(std::ostream& stream, ThreadState state) {
 
 // Switches the state of the given thread to `newState` and returns the previous thread state.
 ALWAYS_INLINE inline ThreadState SwitchThreadState(mm::ThreadData* threadData, ThreadState newState, bool reentrant = false) noexcept {
-    // TODO: This change means that state switch is not atomic. Is it ok?
-    auto oldState = threadData->state();
+    auto oldState = threadData->setState(newState);
     // TODO(perf): Mesaure the impact of this assert in debug and opt modes.
     RuntimeAssert(internal::isStateSwitchAllowed(oldState, newState, reentrant),
                   "Illegal thread state switch. Old state: %s. New state: %s.",
                   ThreadStateName(oldState), ThreadStateName(newState));
-    if (oldState == ThreadState::kNative && newState == ThreadState::kRunnable){
-        mm::SuspendThreadIfRequested(threadData);
-    }
-    threadData->setState(newState);
     return oldState;
 }
 

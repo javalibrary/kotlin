@@ -395,7 +395,7 @@ MemoryState* GetMemoryState();
 } // namespace mm
 
 enum class ThreadState {
-    kRunnable, kNative, kSuspended
+    kRunnable, kNative
 };
 
 ThreadState GetThreadState(MemoryState* thread) noexcept;
