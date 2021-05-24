@@ -17,9 +17,17 @@ import org.jetbrains.kotlin.ir.interpreter.stack.CallStack
 import org.jetbrains.kotlin.ir.interpreter.stack.Variable
 import org.jetbrains.kotlin.ir.interpreter.state.*
 import org.jetbrains.kotlin.ir.types.classOrNull
-import org.jetbrains.kotlin.ir.types.classifierOrNull
+import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.*
 import org.jetbrains.kotlin.utils.addToStdlib.firstNotNullResult
+
+internal fun IrExpression.handleAndDropResult(callStack: CallStack, dropOnlyUnit: Boolean = false) {
+    val dropResult = fun() {
+        if (!dropOnlyUnit && !this.type.isUnit() || callStack.peekState().isUnit()) callStack.popState()
+    }
+    callStack.addInstruction(CustomInstruction(dropResult))
+    callStack.addInstruction(CompoundInstruction(this))
+}
 
 internal fun unfoldInstruction(element: IrElement?, environment: IrInterpreterEnvironment) {
     val callStack = environment.callStack
@@ -189,18 +197,12 @@ private fun unfoldBlock(block: IrBlock, callStack: CallStack) {
 }
 
 private fun unfoldStatements(statements: List<IrStatement>, callStack: CallStack) {
-    fun dropUnitResult() {
-        if (callStack.peekState().isUnit()) callStack.popState()
-    }
-
     for (i in statements.indices.reversed()) {
         when (val statement = statements[i]) {
             is IrClass -> if (!statement.isLocal) TODO("Only local classes are supported")
             is IrFunction -> if (!statement.isLocal) TODO("Only local functions are supported")
-            else -> {
-                callStack.addInstruction(CustomInstruction(::dropUnitResult))
-                callStack.addInstruction(CompoundInstruction(statement))
-            }
+            is IrExpression -> statement.handleAndDropResult(callStack, dropOnlyUnit = true)
+            else -> callStack.addInstruction(CompoundInstruction(statement))
         }
     }
 }
