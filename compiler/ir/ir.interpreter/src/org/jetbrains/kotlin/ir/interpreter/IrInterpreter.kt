@@ -533,7 +533,7 @@ class IrInterpreter private constructor(
             }
             callStack.addInstruction(CustomInstruction(checkUnhandledException))
         }
-        callStack.addInstruction(CompoundInstruction(element.finallyExpression))
+        element.finallyExpression?.handleAndDropResult(callStack)
     }
 
     private fun interpretThrow(expression: IrThrow) {
