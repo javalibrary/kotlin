@@ -102,7 +102,6 @@ private fun PatchBuilder.addObjCPatches() {
 
     addPrivateSelector("toKotlin:")
     addPrivateSelector("releaseAsAssociatedObject:")
-    addPrivateSelector("detachAsAssociatedObject")
 
     addPrivateClass("KIteratorAsNSEnumerator", "iteratorHolder")
     addPrivateClass("KListAsNSArray", "listHolder")

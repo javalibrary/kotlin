@@ -126,13 +126,6 @@ void releaseImp(id self, SEL _cmd) {
   getBackRef(self)->releaseRef();
 }
 
-void detachAsAssociatedObjectImp(id self, SEL _cmd) {
-  auto* classData = GetKotlinClassData(self);
-  // This is called by M&S GC during the sweep phase, so that the object could not possibly
-  // resurrect after being placed into a finalizer queue.
-  getBackRef(self, classData)->detach();
-}
-
 void releaseAsAssociatedObjectImp(id self, SEL _cmd, BOOL detach) {
   auto* classData = GetKotlinClassData(self);
 
@@ -316,8 +309,6 @@ void* CreateKotlinObjCClass(const KotlinObjCClassInfo* info) {
   AddNSObjectOverride(false, newClass, @selector(release), (void*)&releaseImp);
   AddNSObjectOverride(false, newClass, Kotlin_ObjCExport_releaseAsAssociatedObjectSelector,
       (void*)&releaseAsAssociatedObjectImp);
-  AddNSObjectOverride(false, newClass, Kotlin_ObjCExport_detachAsAssociatedObjectSelector,
-      (void*)&detachAsAssociatedObjectImp);
 
   AddMethods(newClass, info->instanceMethods, info->instanceMethodsNum);
   AddMethods(newMetaclass, info->classMethods, info->classMethodsNum);

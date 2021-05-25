@@ -132,12 +132,6 @@ static void injectToRuntime();
   }
 }
 
--(void)detachAsAssociatedObject {
-  // This is called by M&S GC during the sweep phase, so that the object could not possibly
-  // resurrect after being placed into a finalizer queue.
-  refHolder.detach();
-}
-
 -(void)releaseAsAssociatedObject:(BOOL)detach {
   // This function is called by the GC. It made a decision to reclaim Kotlin object, and runs
   // deallocation hooks at the moment, including deallocation of the "associated object" ([self])
@@ -176,9 +170,6 @@ static void injectToRuntime();
 @implementation NSObject (NSObjectToKotlin)
 -(ObjHeader*)toKotlin:(ObjHeader**)OBJ_RESULT {
   RETURN_RESULT_OF(Kotlin_ObjCExport_convertUnmappedObjCObject, self);
-}
-
--(void)detachAsAssociatedObject {
 }
 
 -(void)releaseAsAssociatedObject:(BOOL)detach {
@@ -255,9 +246,6 @@ static void injectToRuntime() {
 
   RuntimeCheck(Kotlin_ObjCExport_releaseAsAssociatedObjectSelector == nullptr, errorMessage);
   Kotlin_ObjCExport_releaseAsAssociatedObjectSelector = @selector(releaseAsAssociatedObject:);
-
-  RuntimeCheck(Kotlin_ObjCExport_detachAsAssociatedObjectSelector == nullptr, errorMessage);
-  Kotlin_ObjCExport_detachAsAssociatedObjectSelector = @selector(detachAsAssociatedObject);
 }
 
 #endif // KONAN_OBJC_INTEROP

@@ -130,13 +130,6 @@ extern "C" ALWAYS_INLINE void Kotlin_ObjCExport_releaseAssociatedObject(void* as
   }
 }
 
-extern "C" ALWAYS_INLINE void Kotlin_ObjCExport_detachAssociatedObject(void* associatedObject) {
-  if (associatedObject != nullptr) {
-    auto msgSend = reinterpret_cast<void (*)(void* self, SEL cmd)>(&objc_msgSend);
-    msgSend(associatedObject, Kotlin_ObjCExport_detachAsAssociatedObjectSelector);
-  }
-}
-
 extern "C" id Kotlin_ObjCExport_convertUnit(ObjHeader* unitInstance) {
   static dispatch_once_t onceToken;
   static id instance = nullptr;
@@ -302,14 +295,12 @@ extern "C" ALWAYS_INLINE OBJ_GETTER(Kotlin_ObjCExport_convertUnmappedObjCObject,
 // Initialized by [ObjCExportClasses.mm].
 extern "C" SEL Kotlin_ObjCExport_toKotlinSelector = nullptr;
 extern "C" SEL Kotlin_ObjCExport_releaseAsAssociatedObjectSelector = nullptr;
-extern "C" SEL Kotlin_ObjCExport_detachAsAssociatedObjectSelector = nullptr;
 
 static OBJ_GETTER(blockToKotlinImp, id self, SEL cmd);
 static OBJ_GETTER(boxedBooleanToKotlinImp, NSNumber* self, SEL cmd);
 
 static OBJ_GETTER(SwiftObject_toKotlinImp, id self, SEL cmd);
 static void SwiftObject_releaseAsAssociatedObjectImp(id self, SEL cmd, BOOL detach);
-static void SwiftObject_detachAsAssociatedObjectImp(id self, SEL cmd);
 
 static void initTypeAdaptersFrom(const ObjCTypeAdapter** adapters, int count) {
   for (int index = 0; index < count; ++index) {
@@ -331,7 +322,6 @@ static void initTypeAdapters() {
 static void Kotlin_ObjCExport_initializeImpl() {
   RuntimeCheck(Kotlin_ObjCExport_toKotlinSelector != nullptr, "unexpected initialization order");
   RuntimeCheck(Kotlin_ObjCExport_releaseAsAssociatedObjectSelector != nullptr, "unexpected initialization order");
-  RuntimeCheck(Kotlin_ObjCExport_detachAsAssociatedObjectSelector != nullptr, "unexpected initialization order");
 
   initTypeAdapters();
 
@@ -344,11 +334,6 @@ static void Kotlin_ObjCExport_initializeImpl() {
   Method releaseAsAssociatedObjectMethod = class_getClassMethod([NSObject class], releaseAsAssociatedObjectSelector);
   RuntimeAssert(releaseAsAssociatedObjectMethod != nullptr, "");
   const char* releaseAsAssociatedObjectTypeEncoding = method_getTypeEncoding(releaseAsAssociatedObjectMethod);
-
-  SEL detachAsAssociatedObjectSelector = Kotlin_ObjCExport_detachAsAssociatedObjectSelector;
-  Method detachAsAssociatedObjectMethod = class_getClassMethod([NSObject class], detachAsAssociatedObjectSelector);
-  RuntimeAssert(detachAsAssociatedObjectMethod != nullptr, "");
-  const char* detachAsAssociatedObjectTypeEncoding = method_getTypeEncoding(detachAsAssociatedObjectMethod);
 
   Class nsBlockClass = objc_getClass("NSBlock");
   RuntimeAssert(nsBlockClass != nullptr, "NSBlock class not found");
@@ -375,12 +360,6 @@ static void Kotlin_ObjCExport_initializeImpl() {
         (IMP)SwiftObject_releaseAsAssociatedObjectImp, releaseAsAssociatedObjectTypeEncoding
       );
       RuntimeAssert(added, "Unable to add 'releaseAsAssociatedObject:' method to SwiftObject class");
-
-      added = class_addMethod(
-        swiftRootClass, detachAsAssociatedObjectSelector,
-        (IMP)SwiftObject_detachAsAssociatedObjectImp, detachAsAssociatedObjectTypeEncoding
-      );
-      RuntimeAssert(added, "Unable to add 'detachAsAssociatedObject' method to SwiftObject class");
     }
   }
 }
@@ -403,8 +382,6 @@ static OBJ_GETTER(SwiftObject_toKotlinImp, id self, SEL cmd) {
 static void SwiftObject_releaseAsAssociatedObjectImp(id self, SEL cmd, BOOL detach) {
   objc_release(self);
 }
-
-static void SwiftObject_detachAsAssociatedObjectImp(id self, SEL cmd) {}
 
 
 extern "C" OBJ_GETTER(Kotlin_boxBoolean, KBoolean value);
