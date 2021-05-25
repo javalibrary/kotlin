@@ -18,6 +18,12 @@
 +(instancetype)createWrapper:(ObjHeader*)obj;
 @end;
 
+enum class ReleaseMode {
+    kRelease,
+    kDetachAndRelease,
+    kDetach,
+};
+
 extern "C" void Kotlin_ObjCExport_initializeClass(Class clazz);
 extern "C" const TypeInfo* Kotlin_ObjCExport_getAssociatedTypeInfo(Class clazz);
 extern "C" OBJ_GETTER(Kotlin_ObjCExport_convertUnmappedObjCObject, id obj);

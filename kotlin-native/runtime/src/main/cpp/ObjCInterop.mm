@@ -126,37 +126,49 @@ void releaseImp(id self, SEL _cmd) {
   getBackRef(self)->releaseRef();
 }
 
-void releaseAsAssociatedObjectImp(id self, SEL _cmd, BOOL detach) {
+void superRelease(id self, KotlinObjCClassData* classData) {
+  // [super release]
+  Class clazz = classData->objcClass;
+  struct objc_super s = {self, clazz};
+  auto messenger = reinterpret_cast<void (*) (struct objc_super*, SEL _cmd)>(objc_msgSendSuper2);
+  messenger(&s, @selector(release));
+}
+
+void releaseAsAssociatedObjectImp(id self, SEL _cmd, ReleaseMode mode) {
   auto* classData = GetKotlinClassData(self);
 
   // This function is called by the GC. It made a decision to reclaim Kotlin object, and runs
   // deallocation hooks at the moment, including deallocation of the "associated object" ([self])
   // using the [super release] call below.
 
-  if (detach) {
-    // The deallocation involves running [self dealloc] which can contain arbitrary code.
-    // In particular, this code can retain and release [self]. Obj-C and Swift runtimes handle this
-    // gracefully (unless the object gets accessed after the deallocation of course), but Kotlin doesn't.
-    // For example, this happens in https://youtrack.jetbrains.com/issue/KT-41811, provoked by
-    // UIViewController.dealloc (which retains-releases self._view._viewDelegate == self) and UIView.dealloc.
-    // Generally retaining and releasing Kotlin object that is being deallocated would lead to
-    // use-after-dispose and double-dispose problems (with unpredictable consequences) or to an assertion failure.
-    // To workaround this, detach the back ref from the Kotlin object:
-    getBackRef(self, classData)->detach();
-  } else {
-    // With Mark&Sweep this object should already have been detached earlier.
-    getBackRef(self, classData)->assertDetached();
-  }
-  // So retain/release/etc. on [self] won't affect the Kotlin object, and an attempt to get
-  // the reference to it (e.g. when calling Kotlin method on [self]) would crash.
-  // The latter is generally ok, because by the time superclass dealloc gets launched, subclass state
-  // should already be deinitialized, and Kotlin methods operate on the subclass.
+  auto* backRef = getBackRef(self, classData);
 
-  // [super release]
-  Class clazz = classData->objcClass;
-  struct objc_super s = {self, clazz};
-  auto messenger = reinterpret_cast<void (*) (struct objc_super*, SEL _cmd)>(objc_msgSendSuper2);
-  messenger(&s, @selector(release));
+  switch (mode) {
+    case ReleaseMode::kDetach:
+      backRef->detach();
+      return;
+    case ReleaseMode::kRelease:
+      // With Mark&Sweep this object should already have been detached earlier.
+      backRef->assertDetached();
+      superRelease(self, classData);
+      return;
+    case ReleaseMode::kDetachAndRelease:
+      // The deallocation involves running [self dealloc] which can contain arbitrary code.
+      // In particular, this code can retain and release [self]. Obj-C and Swift runtimes handle this
+      // gracefully (unless the object gets accessed after the deallocation of course), but Kotlin doesn't.
+      // For example, this happens in https://youtrack.jetbrains.com/issue/KT-41811, provoked by
+      // UIViewController.dealloc (which retains-releases self._view._viewDelegate == self) and UIView.dealloc.
+      // Generally retaining and releasing Kotlin object that is being deallocated would lead to
+      // use-after-dispose and double-dispose problems (with unpredictable consequences) or to an assertion failure.
+      // To workaround this, detach the back ref from the Kotlin object:
+      backRef->detach();
+      // So retain/release/etc. on [self] won't affect the Kotlin object, and an attempt to get
+      // the reference to it (e.g. when calling Kotlin method on [self]) would crash.
+      // The latter is generally ok, because by the time superclass dealloc gets launched, subclass state
+      // should already be deinitialized, and Kotlin methods operate on the subclass.
+      superRelease(self, classData);
+      return;
+  }
 }
 
 }

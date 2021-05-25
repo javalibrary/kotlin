@@ -123,10 +123,24 @@ static Class getOrCreateClass(const TypeInfo* typeInfo);
 
 extern "C" id objc_retainAutoreleaseReturnValue(id self);
 
-extern "C" ALWAYS_INLINE void Kotlin_ObjCExport_releaseAssociatedObject(void* associatedObject, bool detach) {
+extern "C" ALWAYS_INLINE void Kotlin_ObjCExport_releaseAssociatedObject(void* associatedObject) {
   if (associatedObject != nullptr) {
-    auto msgSend = reinterpret_cast<void (*)(void* self, SEL cmd, BOOL detach)>(&objc_msgSend);
-    msgSend(associatedObject, Kotlin_ObjCExport_releaseAsAssociatedObjectSelector, detach);
+    auto msgSend = reinterpret_cast<void (*)(void* self, SEL cmd, ReleaseMode mode)>(&objc_msgSend);
+    msgSend(associatedObject, Kotlin_ObjCExport_releaseAsAssociatedObjectSelector, ReleaseMode::kRelease);
+  }
+}
+
+extern "C" ALWAYS_INLINE void Kotlin_ObjCExport_detachAndReleaseAssociatedObject(void* associatedObject) {
+  if (associatedObject != nullptr) {
+    auto msgSend = reinterpret_cast<void (*)(void* self, SEL cmd, ReleaseMode mode)>(&objc_msgSend);
+    msgSend(associatedObject, Kotlin_ObjCExport_releaseAsAssociatedObjectSelector, ReleaseMode::kDetachAndRelease);
+  }
+}
+
+extern "C" ALWAYS_INLINE void Kotlin_ObjCExport_detachAssociatedObject(void* associatedObject) {
+  if (associatedObject != nullptr) {
+    auto msgSend = reinterpret_cast<void (*)(void* self, SEL cmd, ReleaseMode mode)>(&objc_msgSend);
+    msgSend(associatedObject, Kotlin_ObjCExport_releaseAsAssociatedObjectSelector, ReleaseMode::kDetach);
   }
 }
 
@@ -300,7 +314,7 @@ static OBJ_GETTER(blockToKotlinImp, id self, SEL cmd);
 static OBJ_GETTER(boxedBooleanToKotlinImp, NSNumber* self, SEL cmd);
 
 static OBJ_GETTER(SwiftObject_toKotlinImp, id self, SEL cmd);
-static void SwiftObject_releaseAsAssociatedObjectImp(id self, SEL cmd, BOOL detach);
+static void SwiftObject_releaseAsAssociatedObjectImp(id self, SEL cmd, ReleaseMode mode);
 
 static void initTypeAdaptersFrom(const ObjCTypeAdapter** adapters, int count) {
   for (int index = 0; index < count; ++index) {
@@ -379,7 +393,9 @@ static OBJ_GETTER(SwiftObject_toKotlinImp, id self, SEL cmd) {
   RETURN_RESULT_OF(Kotlin_ObjCExport_convertUnmappedObjCObject, self);
 }
 
-static void SwiftObject_releaseAsAssociatedObjectImp(id self, SEL cmd, BOOL detach) {
+static void SwiftObject_releaseAsAssociatedObjectImp(id self, SEL cmd, ReleaseMode mode) {
+  if (mode == ReleaseMode::kDetach)
+    return;
   objc_release(self);
 }
 

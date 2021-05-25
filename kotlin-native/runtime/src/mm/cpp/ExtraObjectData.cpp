@@ -86,6 +86,6 @@ mm::ExtraObjectData::~ExtraObjectData() {
     RuntimeAssert(!HasWeakReferenceCounter(), "Object must have cleared weak references");
 
 #ifdef KONAN_OBJC_INTEROP
-    Kotlin_ObjCExport_releaseAssociatedObject(associatedObject_, /* detach = */ false);
+    Kotlin_ObjCExport_releaseAssociatedObject(associatedObject_);
 #endif
 }
