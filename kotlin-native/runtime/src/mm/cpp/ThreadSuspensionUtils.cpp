@@ -17,9 +17,9 @@ bool isSuspendedOrNative(kotlin::mm::ThreadData& thread) {
     return suspensionData.suspended() || suspensionData.state() == kotlin::ThreadState::kNative;
 }
 
-bool isRunnableOrNative(kotlin::mm::ThreadData& thread) {
-    auto state = thread.state();
-    return state == kotlin::ThreadState::kRunnable || state == kotlin::ThreadState::kNative;
+bool isNotSuspendedOrNative(kotlin::mm::ThreadData& thread) {
+    auto& suspensionData = thread.suspensionData();
+    return !suspensionData.suspended() || suspensionData.state() == kotlin::ThreadState::kNative;
 }
 
 template<typename F>
@@ -43,15 +43,17 @@ std::condition_variable gSuspendsionCondVar;
 
 } // namespace
 
-void kotlin::mm::ThreadSuspensionData::suspendIfRequested() noexcept {
+bool kotlin::mm::ThreadSuspensionData::suspendIfRequested() noexcept {
     if (IsThreadSuspensionRequested()) {
         std::unique_lock lock(gSuspensionMutex);
         if (IsThreadSuspensionRequested()) {
             suspended_ = true;
             gSuspendsionCondVar.wait(lock, []() { return !IsThreadSuspensionRequested(); });
             suspended_ = false;
+            return true;
         }
     }
+    return false;
 }
 
 bool kotlin::mm::IsThreadSuspensionRequested() {
@@ -80,9 +82,16 @@ void kotlin::mm::ResumeThreads() {
     gSuspendsionCondVar.notify_all();
 
     // Wait for threads to run. Ignore Native threads.
-    // TODO: This loop (+ GC lock) allows us to avoid the situation when a resumed thread triggers the GC again while we still resuming other threads.
-    //       Try to get rid of this?
-    while(!allThreads(isRunnableOrNative)) {
+    // This loop (+ GC lock) allows us to avoid the situation when a resumed thread triggers
+    // the GC again while we still resuming other threads.
+    // In such a stuation the following race can occur:
+    // 1. The GC thread sets gSuspensionRequested = false and resumes threads.
+    // 2. One of the mutators starts to wake up: it exits from conditional_variable::wait but still has suspended=true.
+    // 3. Another mutator wakes up and triggers the GC. GC requests suspending threads,
+    //    sees that the mutator (2) is suspended and moves on.
+    // 4. The mutator (2) sets suspended=false and continues execution of a Kotlin code.
+    //      TODO: Can we get rid of it somehow?
+    while(!allThreads(isNotSuspendedOrNative)) {
         yield();
     }
 }

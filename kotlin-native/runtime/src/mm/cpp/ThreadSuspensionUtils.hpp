@@ -27,7 +27,7 @@ public:
 
     bool suspended() noexcept { return suspended_; }
 
-    void suspendIfRequested() noexcept;
+    bool suspendIfRequested() noexcept;
 
 private:
     std::atomic<ThreadState> state_;
