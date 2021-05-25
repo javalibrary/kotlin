@@ -74,6 +74,7 @@ abstract class AbstractIncrementalJvmCompilerRunnerTest : AbstractIncrementalCom
             moduleName = testDir.name
             destination = destinationDir.path
             classpath = compileClasspath
+            jdkHome = "compiler/testData/mockJDK"
         }
 
     private val compileClasspath =
