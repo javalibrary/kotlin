@@ -26,6 +26,8 @@ import org.junit.Before
 import org.junit.BeforeClass
 import org.junit.Test
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -1383,6 +1385,7 @@ class CocoaPodsIT : BaseGradleIT() {
         fun installPodGen() {
             if (cocoapodsInstallationRequired) {
                 if (cocoapodsInstallationAllowed) {
+                    WorkaroundForXcode12_3.apply()
                     gem("install", "--user-install", "cocoapods", "cocoapods-generate")
                     cocoapodsInstallationPath = File(getGemUserInstallationPath()).resolve("bin")
                 } else {
@@ -1406,7 +1409,11 @@ class CocoaPodsIT : BaseGradleIT() {
                 val packagesToRemove = gem("list", "--no-versions").lineSequence().filter {
                     it.startsWith("cocoapods")
                 }.toList()
-                gem("uninstall", "--user-install", "-x", *packagesToRemove.toTypedArray())
+                try {
+                    gem("uninstall", "--user-install", "-x", *packagesToRemove.toTypedArray())
+                } finally {
+                    WorkaroundForXcode12_3.dispose()
+                }
             }
         }
 
@@ -1457,6 +1464,36 @@ class CocoaPodsIT : BaseGradleIT() {
                 }
             }
             return output
+        }
+
+        // Workaround the issue with Ruby paths for Xcode 12.3.
+        // See: https://github.com/CocoaPods/CocoaPods/issues/10286#issuecomment-750403566
+        private object WorkaroundForXcode12_3 {
+            private val xcodeRubyRoot = File(
+                "/Applications/Xcode.app/Contents/Developer/Platforms/" +
+                        "MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library" +
+                        "/Frameworks/Ruby.framework/Versions/2.6/usr/include/ruby-2.6.0"
+            )
+            private val original = xcodeRubyRoot.resolve("universal-darwin20").toPath()
+            private var link: Path? = null
+
+            fun apply() {
+                val linkFile = xcodeRubyRoot.resolve("universal-darwin19")
+                if (!linkFile.exists() && Files.exists(original)) {
+                    Files.createSymbolicLink(linkFile.toPath(), original)
+                    linkFile.deleteOnExit()
+                    link = linkFile.toPath()
+                }
+            }
+
+            fun dispose() {
+                link?.let { link ->
+                    // We created the link, so now we should delete it.
+                    if (Files.isSymbolicLink(link) && Files.readSymbolicLink(link) == original) {
+                        Files.delete(link)
+                    }
+                }
+            }
         }
     }
 }
