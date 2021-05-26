@@ -26,6 +26,7 @@ import org.jetbrains.kotlin.idea.fir.low.level.api.file.builder.FirFileBuilder
 import org.jetbrains.kotlin.idea.fir.low.level.api.file.builder.ModuleFileCache
 import org.jetbrains.kotlin.idea.fir.low.level.api.file.structure.FileStructureCache
 import org.jetbrains.kotlin.idea.fir.low.level.api.lazy.resolve.FirLazyDeclarationResolver
+import org.jetbrains.kotlin.idea.fir.low.level.api.lazy.resolve.ResolveType
 import org.jetbrains.kotlin.idea.fir.low.level.api.providers.firIdeProvider
 import org.jetbrains.kotlin.idea.fir.low.level.api.sessions.FirIdeSessionProvider
 import org.jetbrains.kotlin.idea.fir.low.level.api.sessions.FirIdeSourcesSession
@@ -125,6 +126,20 @@ internal class FirModuleResolveStateImpl(
             declaration,
             fileCache,
             toPhase,
+            checkPCE = true,
+        )
+        return declaration
+    }
+
+    override fun <D : FirDeclaration> resolveFirToResolveType(declaration: D, type: ResolveType): D {
+        val fileCache = when (val session = declaration.moduleData.session) {
+            is FirIdeSourcesSession -> session.cache
+            else -> return declaration
+        }
+        firLazyDeclarationResolver.lazyResolveDeclaration(
+            declaration,
+            fileCache,
+            type,
             checkPCE = true,
         )
         return declaration

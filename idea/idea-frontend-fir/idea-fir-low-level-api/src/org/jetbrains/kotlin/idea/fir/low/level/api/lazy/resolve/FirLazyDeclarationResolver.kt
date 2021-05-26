@@ -15,6 +15,8 @@ import org.jetbrains.kotlin.fir.resolve.providers.FirProvider
 import org.jetbrains.kotlin.fir.resolve.symbolProvider
 import org.jetbrains.kotlin.fir.resolve.transformers.FirProviderInterceptor
 import org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.FirTowerDataContextCollector
+import org.jetbrains.kotlin.fir.types.FirImplicitTypeRef
+import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
 import org.jetbrains.kotlin.idea.fir.low.level.api.api.*
 import org.jetbrains.kotlin.idea.fir.low.level.api.element.builder.getNonLocalContainingOrThisDeclaration
 import org.jetbrains.kotlin.idea.fir.low.level.api.file.builder.FirFileBuilder
@@ -26,9 +28,163 @@ import org.jetbrains.kotlin.idea.util.ifTrue
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.containingClassOrObject
 
+enum class ResolveType {
+    FileAnnotations,
+    CallableReturnType,
+    ClassSuperTypes,
+    DeclarationStatus,
+    ValueParametersTypes,
+    TypeParametersTypes,
+    AnnotationType,
+    AnnotationParameters,
+    CallableBodyResolve,
+    ResolveForMemberScope,
+    ResolveForSuperMembers,
+    CallableContracts,
+    NoResolve,
+}
+
 internal class FirLazyDeclarationResolver(
     private val firFileBuilder: FirFileBuilder
 ) {
+    fun lazyResolveDeclaration(
+        firDeclaration: FirDeclaration,
+        moduleFileCache: ModuleFileCache,
+        toResolveType: ResolveType,
+        scopeSession: ScopeSession = ScopeSession(),
+        checkPCE: Boolean = false,
+    ) {
+        if (firDeclaration.resolvePhase == FirResolvePhase.BODY_RESOLVE) return
+
+        val firFile = firDeclaration.getContainingFile()
+            ?: error("FirFile was not found for\n${firDeclaration.render()}")
+
+        fun tryResolveAsLocalDeclaration(): Boolean {
+            val nonLocalDeclarationToResolve = firDeclaration.getNonLocalDeclarationToResolve(
+                firFile.moduleData.session.firIdeProvider, moduleFileCache
+            )
+
+            if (firDeclaration != nonLocalDeclarationToResolve) {
+                runLazyDesignatedResolveWithoutLock(
+                    designation = nonLocalDeclarationToResolve.collectDesignation(firFile),
+                    scopeSession = scopeSession,
+                    toPhase = FirResolvePhase.BODY_RESOLVE,
+                    checkPCE = checkPCE,
+                )
+                check(firDeclaration is FirResolvedTypeRef)
+                return true
+            }
+            return false
+        }
+
+        firFileBuilder.runCustomResolveUnderLock(firFile, moduleFileCache) {
+            if (tryResolveAsLocalDeclaration()) return@runCustomResolveUnderLock
+
+            when (toResolveType) {
+                ResolveType.CallableReturnType -> {
+                    require(firDeclaration is FirCallableDeclaration<*>) {
+                        firDeclaration.errorMessage<FirCallableDeclaration<*>>(ResolveType.CallableReturnType)
+                    }
+                    resolveToCallableReturnType(firDeclaration, firFile, scopeSession, checkPCE = false)
+                }
+                else -> error("")
+            }
+        }
+    }
+
+    private inline fun <reified T : FirDeclaration> FirDeclaration.errorMessage(type: ResolveType) =
+        "$type require to be called on ${T::class.simpleName} but ${this::class.simpleName}"
+
+    private fun FirDeclarationUntypedDesignation.minPhase(): FirResolvePhase {
+        val pathOrDeclarationPhase = path.minByOrNull { it.resolvePhase }?.resolvePhase ?: declaration.resolvePhase
+        return minOf(pathOrDeclarationPhase, declaration.resolvePhase)
+    }
+
+    fun resolveToCallableBodyResolve(
+        firDeclaration: FirCallableDeclaration<*>,
+        firFile: FirFile,
+        scopeSession: ScopeSession = ScopeSession(),
+        checkPCE: Boolean,
+    ) {
+        if (firDeclaration.resolvePhase == FirResolvePhase.BODY_RESOLVE) return
+
+        val designation = firDeclaration.collectDesignation(firFile)
+        check(firDeclaration.resolvePhase < FirResolvePhase.BODY_RESOLVE) { "XXX" }
+
+        runLazyDesignatedResolveWithoutLock(
+            designation = designation,
+            scopeSession = scopeSession,
+            toPhase = FirResolvePhase.BODY_RESOLVE,
+            checkPCE = checkPCE,
+        )
+
+        check(firDeclaration.resolvePhase >= FirResolvePhase.BODY_RESOLVE) { "XXX" }
+        check(firDeclaration is FirResolvedTypeRef)
+    }
+
+    fun resolveToCallableReturnType(
+        firDeclaration: FirCallableDeclaration<*>,
+        firFile: FirFile,
+        scopeSession: ScopeSession = ScopeSession(),
+        checkPCE: Boolean,
+    ) {
+        if (firDeclaration.returnTypeRef is FirResolvedTypeRef) return
+
+        val targetPhase =
+            if (firDeclaration.returnTypeRef is FirImplicitTypeRef) FirResolvePhase.IMPLICIT_TYPES_BODY_RESOLVE else FirResolvePhase.TYPES
+
+        val designation = firDeclaration.collectDesignation(firFile)
+        check(firDeclaration.resolvePhase < targetPhase) { "XXX" }
+
+        runLazyDesignatedResolveWithoutLock(
+            designation = designation,
+            scopeSession = scopeSession,
+            toPhase = targetPhase,
+            checkPCE = checkPCE,
+        )
+
+        check(firDeclaration.resolvePhase >= targetPhase) { "XXX" }
+        check(firDeclaration.returnTypeRef is FirResolvedTypeRef)
+    }
+
+    private fun runLazyDesignatedResolveWithoutLock(
+        designation: FirDeclarationUntypedDesignationWithFile,
+        scopeSession: ScopeSession,
+        toPhase: FirResolvePhase,
+        checkPCE: Boolean,
+        isOnAirResolve: Boolean = false,
+        towerDataContextCollector: FirTowerDataContextCollector? = null
+    ) {
+        check(!designation.isLocalDesignation) { "Could not resolve local designation" }
+
+        //This needed to override standard symbol resolve in supertype transformer with adding on-air created symbols
+        val firProviderInterceptor = isOnAirResolve.ifTrue {
+            FirProviderInterceptorForIDE.createForFirElement(
+                session = designation.firFile.moduleData.session,
+                firFile = designation.firFile,
+                element = designation.declaration
+            )
+        }
+
+        var currentPhase = designation.minPhase()
+
+        while (currentPhase < toPhase) {
+            currentPhase = currentPhase.next
+            if (currentPhase.pluginPhase) continue
+            if (checkPCE) checkCanceled()
+            FirLazyBodiesCalculator.calculateLazyBodiesInsideIfNeeded(designation, currentPhase)
+
+            runLazyResolvePhase(
+                phase = currentPhase,
+                scopeSession = scopeSession,
+                designation = designation,
+                towerDataContextCollector = towerDataContextCollector,
+                firProviderInterceptor = firProviderInterceptor
+            )
+        }
+    }
+
+
     /**
      * Fully resolve file annotations (synchronized)
      * @see resolveFileAnnotationsWithoutLock not synchronized
@@ -96,6 +252,19 @@ internal class FirLazyDeclarationResolver(
         return declaration
     }
 
+    private fun FirDeclaration.firResolvePhaseWithSubDeclarations(): FirResolvePhase {
+        fun <T : FirDeclaration> T.containingDeclarations() = when (this) {
+            is FirClass<*> -> declarations
+            is FirAnonymousObject -> declarations
+            else -> emptyList()
+        }
+
+        val containingResolvePhase =
+            containingDeclarations().minByOrNull { it.firResolvePhaseWithSubDeclarations() }?.resolvePhase ?: resolvePhase
+
+        return minOf(containingResolvePhase, resolvePhase)
+    }
+
     /**
      * Run partially designated resolve that resolve declaration into last file-wise resolve and then resolve a designation (synchronized)
      * @see LAST_NON_LAZY_PHASE is the last file-wise resolve
@@ -110,7 +279,8 @@ internal class FirLazyDeclarationResolver(
         checkPCE: Boolean = false,
         reresolveFile: Boolean = false,
     ) {
-        if (declaration.resolvePhase >= toPhase) return
+        val resolvePhase = declaration.firResolvePhaseWithSubDeclarations()
+        if (resolvePhase >= toPhase) return
 
         val resolvableDeclaration = getResolvableDeclaration(declaration, moduleFileCache)
 
@@ -121,7 +291,8 @@ internal class FirLazyDeclarationResolver(
         // Lazy since we want to read the resolve phase inside the lock. Otherwise, we may run the same resolve phase multiple times. See
         // KT-45121
         val fromPhase: FirResolvePhase by lazy(LazyThreadSafetyMode.NONE) {
-            if (reresolveFile) resolvableDeclaration.resolvePhase else minOf(firFile.resolvePhase, resolvableDeclaration.resolvePhase)
+            val resolvable = resolvableDeclaration.firResolvePhaseWithSubDeclarations()
+            if (reresolveFile) resolvableDeclaration.resolvePhase else minOf(resolvable, resolvable)
         }
 
         if (checkPCE) {
@@ -218,7 +389,7 @@ internal class FirLazyDeclarationResolver(
         // Lazy since we want to read the resolve phase inside the lock. Otherwise, we may run the same resolve phase multiple times. See
         // KT-45121
         val fromPhase: FirResolvePhase by lazy(LazyThreadSafetyMode.NONE) {
-            minOf(containerFirFile.resolvePhase, firDeclarationToResolve.resolvePhase)
+            minOf(containerFirFile.resolvePhase, firDeclarationToResolve.firResolvePhaseWithSubDeclarations())
         }
 
         if (checkPCE) {
@@ -303,25 +474,11 @@ internal class FirLazyDeclarationResolver(
             )
         }
 
-        val topLevelDeclarationDesignation = designation.path.firstOrNull()?.let {
-            FirDeclarationDesignationWithFile(emptyList(), it, false, designation.firFile)
-        }
-
         while (currentPhase < toPhase) {
             currentPhase = currentPhase.next
             if (currentPhase.pluginPhase) continue
             if (checkPCE) checkCanceled()
             FirLazyBodiesCalculator.calculateLazyBodiesInsideIfNeeded(designation, currentPhase)
-
-//            if (topLevelDeclarationDesignation != null) {
-//                runLazyResolvePhase(
-//                    phase = currentPhase,
-//                    scopeSession = scopeSession,
-//                    designation = topLevelDeclarationDesignation,
-//                    towerDataContextCollector = null,
-//                    firProviderInterceptor = null
-//                )
-//            }
 
             runLazyResolvePhase(
                 phase = currentPhase,
@@ -340,8 +497,6 @@ internal class FirLazyDeclarationResolver(
         towerDataContextCollector: FirTowerDataContextCollector?,
         firProviderInterceptor: FirProviderInterceptor?
     ) {
-        if (designation.declaration.resolvePhase >= phase) return
-
         val transformer = phase.createLazyTransformer(
             designation,
             scopeSession,
