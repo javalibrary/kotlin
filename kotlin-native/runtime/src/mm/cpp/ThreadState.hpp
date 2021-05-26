@@ -26,23 +26,19 @@ const char* stateToString(ThreadState state) noexcept;
 // Switches the state of the given thread to `newState` and returns the previous thread state.
 ALWAYS_INLINE inline ThreadState SwitchThreadState(mm::ThreadData* threadData, ThreadState newState, bool reentrant = false) noexcept {
     auto oldState = threadData->setState(newState);
-#if 0
     // TODO(perf): Mesaure the impact of this assert in debug and opt modes.
     RuntimeAssert(internal::isStateSwitchAllowed(oldState, newState, reentrant),
                   "Illegal thread state switch. Old state: %s. New state: %s.",
                   internal::stateToString(oldState), internal::stateToString(newState));
-#endif
     return oldState;
 }
 
 // Asserts that the given thread is in the given state.
 ALWAYS_INLINE inline void AssertThreadState(mm::ThreadData* threadData, ThreadState expected) noexcept {
-#if 0
     auto actual = threadData->state();
     RuntimeAssert(actual == expected,
                   "Unexpected thread state. Expected: %s. Actual: %s.",
                   internal::stateToString(expected), internal::stateToString(actual));
-#endif
 }
 
 } // namespace kotlin
