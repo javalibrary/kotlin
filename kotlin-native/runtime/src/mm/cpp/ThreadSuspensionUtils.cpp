@@ -33,6 +33,7 @@ void yield() noexcept {
 }
 
 std::atomic<bool> gSuspensionRequested = false;
+THREAD_LOCAL_VARIABLE bool gSuspensionRequestedByCurrentThread = false;
 std::mutex gSuspensionMutex;
 std::condition_variable gSuspendsionCondVar;
 
@@ -56,16 +57,24 @@ bool kotlin::mm::IsThreadSuspensionRequested() noexcept {
     return gSuspensionRequested.load();
 }
 
-void kotlin::mm::SuspendThreads() noexcept {
+bool kotlin::mm::SuspendThreads() noexcept {
+    RuntimeAssert(gSuspensionRequestedByCurrentThread == false, "Current thread already suspended threads.");
     {
         std::unique_lock lock(gSuspensionMutex);
-        gSuspensionRequested = true;
+        bool actual = false;
+        gSuspensionRequested.compare_exchange_strong(actual, true);
+        if (actual) {
+            return false;
+        }
     }
+    gSuspensionRequestedByCurrentThread = true;
 
     // Spin wating for threads to suspend. Ignore Native threads.
     while(!allThreads(isSuspendedOrNative)) {
         yield();
     }
+
+    return true;
 }
 
 void kotlin::mm::ResumeThreads() noexcept {
@@ -77,5 +86,6 @@ void kotlin::mm::ResumeThreads() noexcept {
         std::unique_lock lock(gSuspensionMutex);
         gSuspensionRequested = false;
     }
+    gSuspensionRequestedByCurrentThread = false;
     gSuspendsionCondVar.notify_all();
 }
