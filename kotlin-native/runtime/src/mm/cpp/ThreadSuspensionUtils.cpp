@@ -43,9 +43,8 @@ bool kotlin::mm::ThreadSuspensionData::suspendIfRequested() noexcept {
     if (IsThreadSuspensionRequested()) {
         std::unique_lock lock(gSuspensionMutex);
         if (IsThreadSuspensionRequested()) {
-            suspended_ = true;
+            AutoReset scopedAssign(&suspended_, true);
             gSuspendsionCondVar.wait(lock, []() { return !IsThreadSuspensionRequested(); });
-            suspended_ = false;
             return true;
         }
     }
