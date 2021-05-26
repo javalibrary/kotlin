@@ -19,7 +19,7 @@ using namespace kotlin;
 
 namespace {
 
-constexpr size_t kDefaultIterations = 100;
+constexpr size_t kDefaultIterations = 10000;
 
 void joinAll(KStdVector<std::thread>& threads) {
     for (auto& thread : threads) {
@@ -50,7 +50,7 @@ KStdVector<bool> collectSuspended() {
 }
 
 void reportProgress(size_t currentIteration, size_t totalIterations) {
-    if (currentIteration % 50 == 0) {
+    if (currentIteration % 1000 == 0) {
        std::cout << "Iteration: " << currentIteration << " of " << totalIterations << std::endl;
     }
 }
@@ -59,7 +59,7 @@ void reportProgress(size_t currentIteration, size_t totalIterations) {
 
 TEST(ThreadSuspensionTest, SimpleStartStop) {
     constexpr size_t kThreadCount = kDefaultThreadCount;
-    constexpr size_t kIterations = 10;
+    constexpr size_t kIterations = kDefaultIterations;
     KStdVector<std::thread> threads;
     std::array<std::atomic<bool>, kThreadCount> ready{false};
     std::atomic<bool> canStart(false);
