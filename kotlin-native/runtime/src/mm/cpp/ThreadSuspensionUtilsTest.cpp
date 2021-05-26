@@ -86,12 +86,12 @@ TEST(ThreadSuspensionTest, SimpleStartStop) {
         });
     }
 
+    while (!std::all_of(ready.begin(), ready.end(), [](bool it) { return it; })) {
+        std::this_thread::yield();
+    }
+
     for (size_t i = 0; i < kIterations; i++) {
         reportProgress(i, kIterations);
-
-        while (!std::all_of(ready.begin(), ready.end(), [](bool it) { return it; })) {
-            std::this_thread::yield();
-        }
         canStart = true;
 
         mm::SuspendThreads();
@@ -100,12 +100,16 @@ TEST(ThreadSuspensionTest, SimpleStartStop) {
         EXPECT_EQ(mm::IsThreadSuspensionRequested(), true);
 
         mm::ResumeThreads();
+
+        // Wait for threads to run and sync for the next iteration
+        canStart = false;
+        while (!std::all_of(ready.begin(), ready.end(), [](bool it) { return it; })) {
+            std::this_thread::yield();
+        }
+
         suspended = collectSuspended();
         EXPECT_THAT(suspended, testing::Each(false));
         EXPECT_EQ(mm::IsThreadSuspensionRequested(), false);
-
-        // Sync for the next iteration.
-        canStart = false;
     }
 
     canStart = true;

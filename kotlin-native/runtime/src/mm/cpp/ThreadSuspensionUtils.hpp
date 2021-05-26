@@ -45,7 +45,7 @@ void SuspendThreads();
 
 /**
  * Resumes all threads registered in ThreadRegistry that were suspended by the SuspendThreads call.
- * Blocks until all such threads are resumed.
+ * Does not wait until all such threads are actually resumed.
  */
 void ResumeThreads();
 

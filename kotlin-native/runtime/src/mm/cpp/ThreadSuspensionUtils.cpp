@@ -83,18 +83,4 @@ void kotlin::mm::ResumeThreads() {
         gSuspensionRequested = false;
     }
     gSuspendsionCondVar.notify_all();
-
-    // Wait for threads to run. Ignore Native threads.
-    // This loop (+ GC lock) allows us to avoid the situation when a resumed thread triggers
-    // the GC again while we still resuming other threads.
-    // In such a stuation the following race can occur:
-    // 1. The GC thread sets gSuspensionRequested = false and resumes threads.
-    // 2. One of the mutators starts to wake up: it exits from conditional_variable::wait but still has suspended=true.
-    // 3. Another mutator wakes up and triggers the GC. GC requests suspending threads,
-    //    sees that the mutator (2) is suspended and moves on.
-    // 4. The mutator (2) sets suspended=false and continues execution of a Kotlin code.
-    //      TODO: Can we get rid of it somehow?
-    while(!allThreads(isNotSuspendedOrNative)) {
-        yield();
-    }
 }
