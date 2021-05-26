@@ -89,7 +89,7 @@ fun test13(): <!CONFLICTING_PROJECTION!>InOuter<Int>.OutIntermediate<in String>.
 fun test14(): InOuter<Int>.OutIntermediate<out String>.InInner<Char> = InOuter<Int>().OutIntermediate<String>().InInner()
 
 fun test15(): InOuter<Int>.OutIntermediate<String>.InInner<in Char> = InOuter<Int>().OutIntermediate<String>().InInner()
-fun test16(): <!CONFLICTING_PROJECTION!>InOuter<Int>.OutIntermediate<String>.InInner<out Char><!> = InOuter<Int>().OutIntermediate<String>().InInner()
+fun test16(): <!CONFLICTING_PROJECTION!>InOuter<Int>.OutIntermediate<String>.InInner<out Char><!> = InOuter<Int>().OutIntermediate<String>().<!NEW_INFERENCE_NO_INFORMATION_FOR_PARAMETER!>InInner<!>()
 
 fun test17(): InOuter<in Int>.OutIntermediate<out String>.InInner<Char> = InOuter<Int>().OutIntermediate<String>().InInner()
-fun test18(): <!CONFLICTING_PROJECTION!>InOuter<Int>.OutIntermediate<in String>.InInner<out Char><!> = InOuter<Int>().OutIntermediate<String>().InInner()
+fun test18(): <!CONFLICTING_PROJECTION!>InOuter<Int>.OutIntermediate<in String>.InInner<out Char><!> = InOuter<Int>().OutIntermediate<String>().<!NEW_INFERENCE_NO_INFORMATION_FOR_PARAMETER!>InInner<!>()
