@@ -670,7 +670,7 @@ class DescriptorSerializer private constructor(
 
     private fun fillFromPossiblyInnerType(builder: ProtoBuf.Type.Builder, type: PossiblyInnerType) {
         val classifierDescriptor = type.classifierDescriptor
-        val (classifierId, isClassIdReplaced, isReplacementKeptGeneric) = getClassifierIdReplacementAware(classifierDescriptor)
+        val classifierId = getClassifierId(classifierDescriptor)
 
         when (classifierDescriptor) {
             is ClassDescriptor -> builder.className = classifierId
@@ -678,7 +678,7 @@ class DescriptorSerializer private constructor(
         }
 
         // Shouldn't write type parameters of a generic local anonymous type if it was replaced with Any
-        if (!isClassIdReplaced || isReplacementKeptGeneric) {
+        if (!DescriptorUtils.isLocal(classifierDescriptor) || stringTable.isLocalClassIdReplacementKeptGeneric) {
             for (projection in type.arguments) {
                 builder.addArgument(typeArgument(projection))
             }
@@ -803,9 +803,6 @@ class DescriptorSerializer private constructor(
 
     private fun getClassifierId(descriptor: ClassifierDescriptorWithTypeParameters): Int =
         stringTable.getFqNameIndex(descriptor)
-
-    private fun getClassifierIdReplacementAware(descriptor: ClassifierDescriptorWithTypeParameters): FqNameIndexWithLocalReplacementInfo =
-        stringTable.getFqNameIndexReplacementAware(descriptor)
 
     private fun getSimpleNameIndex(name: Name): Int =
         stringTable.getStringIndex(name.asString())
