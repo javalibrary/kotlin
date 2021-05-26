@@ -62,7 +62,10 @@ bool kotlin::mm::IsThreadSuspensionRequested() {
 }
 
 void kotlin::mm::SuspendThreads() {
-    gSuspensionRequested = true;
+    {
+        std::unique_lock lock(gSuspensionMutex);
+        gSuspensionRequested = true;
+    }
 
     // Spin wating for threads to suspend. Ignore Native threads.
     while(!allThreads(isSuspendedOrNative)) {
