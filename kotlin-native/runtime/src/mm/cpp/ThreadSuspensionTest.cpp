@@ -4,7 +4,7 @@
  */
 
 #include "MemoryPrivate.hpp"
-#include "ThreadSuspensionUtils.hpp"
+#include "ThreadSuspension.hpp"
 #include "ThreadState.hpp"
 
 #include <gtest/gtest.h>

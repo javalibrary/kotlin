@@ -12,7 +12,7 @@
 #include <Utils.hpp>
 
 #include "ThreadData.hpp"
-#include "ThreadSuspensionUtils.hpp"
+#include "ThreadSuspension.hpp"
 
 namespace kotlin {
 

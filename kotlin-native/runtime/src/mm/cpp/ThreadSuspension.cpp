@@ -5,7 +5,7 @@
 
 #include "ThreadData.hpp"
 #include "ThreadState.hpp"
-#include "ThreadSuspensionUtils.hpp"
+#include "ThreadSuspension.hpp"
 
 #include <thread>
 

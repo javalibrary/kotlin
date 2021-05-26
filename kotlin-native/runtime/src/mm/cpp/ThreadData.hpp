@@ -18,7 +18,7 @@
 #include "ThreadLocalStorage.hpp"
 #include "Types.h"
 #include "Utils.hpp"
-#include "ThreadSuspensionUtils.hpp"
+#include "ThreadSuspension.hpp"
 
 struct ObjHeader;
 
