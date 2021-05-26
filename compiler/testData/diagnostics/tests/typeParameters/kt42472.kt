@@ -1,12 +1,14 @@
-// WITH_REFLECT
-
 import kotlin.reflect.KProperty
 
-fun interface ReadOnlyProperty<in T, out V> {
-    operator fun getValue(thisRef: T, property: KProperty<*>): V
+fun <T> id(): T = null!!
+interface A<E>
+fun <T> id1(): A<T> = null!!
+
+fun main() {
+
+    id1() as A<String>
+
+//    foo(id1())
 }
 
-class Problem {
-    val variable: Int by <!DELEGATE_SPECIAL_FUNCTION_NONE_APPLICABLE!><!TYPE_MISMATCH!>delegate<!>()<!> // delegate returns `ReadOnlyProperty<Problem, {CharSequence & Int}>`
-    fun <T : CharSequence> delegate() = null <!CAST_NEVER_SUCCEEDS!>as<!> ReadOnlyProperty<Problem, T>
-}
+fun foo(x: A<String>) {}
