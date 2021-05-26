@@ -34,20 +34,20 @@ private:
     std::atomic<bool> suspended_;
 };
 
-bool IsThreadSuspensionRequested();
+bool IsThreadSuspensionRequested() noexcept;
 
 /**
  * Suspends all threads registered in ThreadRegistry except threads that are in the Native state.
  * Blocks until all such threads are suspended. Threads that are in the Native state on the moment
  * of this call will be suspended on exit from the Native state.
  */
-void SuspendThreads();
+void SuspendThreads() noexcept;
 
 /**
  * Resumes all threads registered in ThreadRegistry that were suspended by the SuspendThreads call.
  * Does not wait until all such threads are actually resumed.
  */
-void ResumeThreads();
+void ResumeThreads() noexcept;
 
 } // namespace mm
 } // namespace kotlin

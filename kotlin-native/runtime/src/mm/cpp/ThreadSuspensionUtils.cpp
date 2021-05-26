@@ -12,18 +12,13 @@
 namespace {
 
 // TODO: Accept a ThreadSuspensionData?
-bool isSuspendedOrNative(kotlin::mm::ThreadData& thread) {
+bool isSuspendedOrNative(kotlin::mm::ThreadData& thread) noexcept {
     auto& suspensionData = thread.suspensionData();
     return suspensionData.suspended() || suspensionData.state() == kotlin::ThreadState::kNative;
 }
 
-bool isNotSuspendedOrNative(kotlin::mm::ThreadData& thread) {
-    auto& suspensionData = thread.suspensionData();
-    return !suspensionData.suspended() || suspensionData.state() == kotlin::ThreadState::kNative;
-}
-
 template<typename F>
-bool allThreads(F predicate) {
+bool allThreads(F predicate) noexcept {
     kotlin::mm::ThreadRegistry::Iterable threads = kotlin::mm::ThreadRegistry::Instance().Iter();
     for (auto& thread : threads) {
         if (!predicate(thread)) {
@@ -33,7 +28,7 @@ bool allThreads(F predicate) {
     return true;
 }
 
-void yield() {
+void yield() noexcept {
     std::this_thread::yield();
 }
 
@@ -56,12 +51,12 @@ bool kotlin::mm::ThreadSuspensionData::suspendIfRequested() noexcept {
     return false;
 }
 
-bool kotlin::mm::IsThreadSuspensionRequested() {
+bool kotlin::mm::IsThreadSuspensionRequested() noexcept {
     // TODO: Consider using a more relaxed memory order.
     return gSuspensionRequested.load();
 }
 
-void kotlin::mm::SuspendThreads() {
+void kotlin::mm::SuspendThreads() noexcept {
     {
         std::unique_lock lock(gSuspensionMutex);
         gSuspensionRequested = true;
@@ -73,7 +68,7 @@ void kotlin::mm::SuspendThreads() {
     }
 }
 
-void kotlin::mm::ResumeThreads() {
+void kotlin::mm::ResumeThreads() noexcept {
     // From the std::condition_variable docs:
     // Even if the shared variable is atomic, it must be modified under
     // the mutex in order to correctly publish the modification to the waiting thread.
