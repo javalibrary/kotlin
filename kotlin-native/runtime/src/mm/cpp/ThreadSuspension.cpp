@@ -18,8 +18,13 @@ bool isSuspendedOrNative(kotlin::mm::ThreadData& thread) noexcept {
 
 template<typename F>
 bool allThreads(F predicate) noexcept {
+    auto& threadRegistry = kotlin::mm::ThreadRegistry::Instance();
+    auto* currentThread = threadRegistry.CurrentThreadData();
     kotlin::mm::ThreadRegistry::Iterable threads = kotlin::mm::ThreadRegistry::Instance().Iter();
     for (auto& thread : threads) {
+        // Handle if suspension was initiated by the mutator thread.
+        if (&thread == currentThread)
+            continue;
         if (!predicate(thread)) {
             return false;
         }
