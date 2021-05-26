@@ -267,6 +267,10 @@ private fun ConstraintSystemError.toDiagnostic(
                         upperConeType,
                     )
                 }
+                is DelegatedPropertyConstraintPosition<*> -> {
+                    errorsToIgnore.add(this)
+                    return null
+                }
                 else -> null
             }
         }
