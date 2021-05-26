@@ -11,7 +11,6 @@
 
 namespace {
 
-// TODO: Accept a ThreadSuspensionData?
 bool isSuspendedOrNative(kotlin::mm::ThreadData& thread) noexcept {
     auto& suspensionData = thread.suspensionData();
     return suspensionData.suspended() || suspensionData.state() == kotlin::ThreadState::kNative;
