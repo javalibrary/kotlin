@@ -152,7 +152,7 @@ def construct_cmake_flags(
         cmake_args.append('-DCMAKE_CXX_COMPILER=' + cxx_compiler)
     if linker is not None:
         cmake_args.append('-DCMAKE_LINKER=' + linker)
-    if c_compiler is not None:
+    if ar is not None:
         cmake_args.append('-DCMAKE_AR=' + ar)
 
     if c_flags is not None:
@@ -175,9 +175,12 @@ def construct_cmake_flags(
     # Make distribution much smaller by linking to dynamic library
     # instead of static linkage.
     # Not working for Windows yet.
+    #
+    # Also not working for Linux and macOS because of signal chaining.
+    # TODO: Enable after LLVM distribution patching.
     if not host_is_windows():
-        cmake_args.append("-LLVM_BUILD_LLVM_DYLIB=ON")
-        cmake_args.append("-DLLVM_LINK_LLVM_DYLIB=ON")
+        cmake_args.append("-LLVM_BUILD_LLVM_DYLIB=OFF")
+        cmake_args.append("-DLLVM_LINK_LLVM_DYLIB=OFF")
 
     return cmake_args
 
