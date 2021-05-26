@@ -94,7 +94,7 @@ static inline KInt objCIndexToKotlinOrThrow(NSUInteger index) {
 }
 
 -(void)releaseAsAssociatedObject:(ReleaseMode)mode {
-  if (mode == ReleaseMode::kDetach)
+  if (!ReleaseModeHasRelease(mode))
     return;
   objc_release(self);
 }
@@ -109,7 +109,7 @@ static inline KInt objCIndexToKotlinOrThrow(NSUInteger index) {
 }
 
 -(void)releaseAsAssociatedObject:(ReleaseMode)mode {
-  if (mode == ReleaseMode::kDetach)
+  if (!ReleaseModeHasRelease(mode))
     return;
   objc_release(self);
 }
@@ -125,7 +125,7 @@ static inline KInt objCIndexToKotlinOrThrow(NSUInteger index) {
 }
 
 -(void)releaseAsAssociatedObject:(ReleaseMode)mode {
-  if (mode == ReleaseMode::kDetach)
+  if (!ReleaseModeHasRelease(mode))
     return;
   objc_release(self);
 }
@@ -141,7 +141,7 @@ static inline KInt objCIndexToKotlinOrThrow(NSUInteger index) {
 }
 
 -(void)releaseAsAssociatedObject:(ReleaseMode)mode {
-  if (mode == ReleaseMode::kDetach)
+  if (!ReleaseModeHasRelease(mode))
     return;
   objc_release(self);
 }
@@ -570,7 +570,7 @@ static inline id KMap_get(KRef map, id aKey) {
 
 @implementation NSEnumerator (NSEnumeratorAsAssociatedObject)
 -(void)releaseAsAssociatedObject:(ReleaseMode)mode {
-  if (mode == ReleaseMode::kDetach)
+  if (!ReleaseModeHasRelease(mode))
     return;
   objc_release(self);
 }

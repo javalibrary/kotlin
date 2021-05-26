@@ -75,8 +75,7 @@ void objc_release(id obj);
 
 // Called when removing Kotlin object.
 -(void)releaseAsAssociatedObject:(ReleaseMode)mode {
-  if (mode == ReleaseMode::kDetach)
-    // TODO: Should it destroy weak?
+  if (!ReleaseModeHasRelease(mode))
     return;
   objc_destroyWeak(&referred);
   objc_release(self);
