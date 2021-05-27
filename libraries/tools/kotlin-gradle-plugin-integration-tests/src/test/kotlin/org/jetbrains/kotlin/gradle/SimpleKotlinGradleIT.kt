@@ -7,6 +7,7 @@ import org.jetbrains.kotlin.gradle.testbase.*
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Tag
 
+@SimpleKGPTests
 @DisplayName("KGP simple tests")
 class SimpleKotlinGradleIT : KGPBaseTest() {
 
