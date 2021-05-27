@@ -88,7 +88,7 @@ class LiteralFunctionTranslator(context: TranslationContext) : AbstractTranslato
                 val lambdaInterceptor = if (isInline) "" else context().config.configuration.get(JSConfigurationKeys.LAMBDA_INTERCEPTOR) ?: ""
                 if (lambdaInterceptor != "") {
                     val ret = lambdaCreator.body.statements.single() as JsReturn
-                    ret.expression = JsInvocation(JsNameRef(lambdaInterceptor), lambdaCreator.name.makeRef(), JsArrayLiteral(lambdaCreator.parameters.map { it.name.makeRef() }), ret.expression)
+                    ret.expression = JsInvocation(JsNameRef(lambdaInterceptor), name.makeRef(), JsArrayLiteral(lambdaCreator.parameters.map { it.name.makeRef() }), ret.expression)
                 }
             }
         }
