@@ -41,6 +41,7 @@ import org.jetbrains.kotlin.js.translate.utils.fillCoroutineMetadata
 import org.jetbrains.kotlin.js.translate.utils.finalElement
 import org.jetbrains.kotlin.psi.KtDeclaration
 import org.jetbrains.kotlin.psi.KtDeclarationWithBody
+import org.jetbrains.kotlin.psi.KtFunction
 import org.jetbrains.kotlin.psi.KtParameter
 import org.jetbrains.kotlin.resolve.DescriptorToSourceUtils
 import org.jetbrains.kotlin.resolve.inline.InlineUtil
@@ -83,7 +84,8 @@ class LiteralFunctionTranslator(context: TranslationContext) : AbstractTranslato
             lambdaCreator.source = declaration
 
             return lambdaCreator.withCapturedParameters(functionContext, name, invokingContext, declaration).also {
-                val lambdaInterceptor = if (descriptor.isInline) "" else context().config.configuration.get(JSConfigurationKeys.LAMBDA_INTERCEPTOR) ?: ""
+                val isInline = descriptor.isInline || InlineUtil.isInlinedArgument(declaration as KtFunction, context().bindingContext(), true)
+                val lambdaInterceptor = if (isInline) "" else context().config.configuration.get(JSConfigurationKeys.LAMBDA_INTERCEPTOR) ?: ""
                 if (lambdaInterceptor != "") {
                     val ret = lambdaCreator.body.statements.single() as JsReturn
                     ret.expression = JsInvocation(JsNameRef(lambdaInterceptor), lambdaCreator.name.makeRef(), JsArrayLiteral(lambdaCreator.parameters.map { it.name.makeRef() }), ret.expression)
